@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>종량제 봉투 판매 관리 시스템 (모바일)</title>
+  <!-- SEO & PWA 메타 태그 -->
+  <meta name="description" content="종량제 봉투 판매, 재고, 미수금 모바일 관리 시스템">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="stylesheet" href="/static/css/mobile.css">
+</head>
+<body>
+
+  <!-- 상단 모던 헤더 -->
+  <header class="app-header">
+    <div class="brand-logo">
+      🗑 <span>봉투 관리</span>
+    </div>
+    <div class="header-clock" id="header-clock">--:--:--</div>
+  </header>
+
+  <!-- 메인 컨테이너 -->
+  <main class="container">
+
+    <!-- 1. 대시보드 탭 -->
+    <section id="tab-dashboard" class="tab-content active">
+      <div class="summary-grid">
+        <div class="stat-card">
+          <div class="stat-label">오늘 판매액</div>
+          <div class="stat-value orange" id="dash-today-sales">0원</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">오늘 출고량</div>
+          <div class="stat-value green" id="dash-today-qty">0개</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-label">총 미수 잔액</div>
+          <div class="stat-value red" id="dash-total-ar">0원</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">당월 누적 판매</div>
+          <div class="stat-value" id="dash-month-sales">0원</div>
+        </div>
+      </div>
+
+      <!-- 빠른 판매 등록 카드 -->
+      <div class="card">
+        <div class="card-title">🧾 빠른 판매 등록</div>
+        <div class="form-group">
+          <label class="form-label">판매 일자</label>
+          <input type="date" class="form-control" id="sale-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">거래처 선택 *</label>
+          <select class="form-control" id="sale-customer">
+            <option value="">로딩 중...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">품목 및 규격 선택 *</label>
+          <select class="form-control" id="sale-spec">
+            <option value="">로딩 중...</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">수량 *</label>
+            <input type="number" class="form-control" id="sale-qty" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">단가 (원)</label>
+            <input type="number" class="form-control" id="sale-unit-price" placeholder="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">합계 금액</label>
+            <input type="text" class="form-control" id="sale-total-amount" readonly placeholder="0 원" style="font-weight:bold; color:#818cf8;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">결제 구별</label>
+            <select class="form-control" id="sale-payment-method">
+              <option value="미수">미수</option>
+              <option value="현금">현금</option>
+              <option value="카드">카드</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">비고/메모</label>
+          <input type="text" class="form-control" id="sale-memo" placeholder="비고 입력 (선택)">
+        </div>
+        <button class="btn btn-primary" onclick="submitSale()">⚡ 판매 등록 및 재고 차감</button>
+      </div>
+    </section>
+
+    <!-- 2. 오늘 판매 내역 탭 -->
+    <section id="tab-sales" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>📅 오늘 판매 내역</span>
+          <button class="btn btn-outline btn-sm" onclick="loadSalesList()">🔄 새로고침</button>
+        </div>
+        <div class="data-list" id="sales-list">
+          <div class="list-item"><div class="list-item-sub">로딩 중...</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 미수 관리 탭 -->
+    <section id="tab-ar" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>📝 거래처별 미수금 현황</span>
+          <button class="btn btn-outline btn-sm" onclick="loadARList()">🔄 새로고침</button>
+        </div>
+        <div class="data-list" id="ar-list">
+          <div class="list-item"><div class="list-item-sub">로딩 중...</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 재고 현황 탭 -->
+    <section id="tab-stock" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>📦 규격별 현재고 현황</span>
+          <button class="btn btn-outline btn-sm" onclick="loadStockList()">🔄 새로고침</button>
+        </div>
+        <div class="data-list" id="stock-list">
+          <div class="list-item"><div class="list-item-sub">로딩 중...</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. 거래처 관리 탭 -->
+    <section id="tab-customer" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>🏢 거래처 관리</span>
+          <button class="btn btn-success btn-sm" onclick="document.getElementById('customer-modal').classList.add('active')">➕ 신규 등록</button>
+        </div>
+        <div class="data-list" id="customer-list">
+          <div class="list-item"><div class="list-item-sub">로딩 중...</div></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 수금 입력 모달 -->
+  <div class="modal-overlay" id="collection-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">💵 미수 수금 등록</div>
+        <button class="close-btn" onclick="closeModal('collection-modal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">수금 일자</label>
+        <input type="date" class="form-control" id="collection-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">거래처</label>
+        <select class="form-control" id="collection-customer"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">수금 금액 (원)</label>
+        <input type="number" class="form-control" id="collection-amount" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">수금 수단</label>
+        <select class="form-control" id="collection-payment-method">
+          <option value="현금">현금</option>
+          <option value="계좌이체">계좌이체</option>
+          <option value="카드">카드</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">메모</label>
+        <input type="text" class="form-control" id="collection-memo" placeholder="수금 메모 (선택)">
+      </div>
+      <button class="btn btn-success" onclick="submitCollection()">수금 저장</button>
+    </div>
+  </div>
+
+  <!-- 신규 거래처 등록 모달 -->
+  <div class="modal-overlay" id="customer-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">🏢 신규 거래처 등록</div>
+        <button class="close-btn" onclick="closeModal('customer-modal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">거래처명 *</label>
+        <input type="text" class="form-control" id="cust-name" placeholder="거래처명 입력">
+      </div>
+      <div class="form-group">
+        <label class="form-label">구분</label>
+        <select class="form-control" id="cust-type">
+          <option value="출고처">출고처</option>
+          <option value="입고처">입고처</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">지역(동)</label>
+        <input type="text" class="form-control" id="cust-district" placeholder="예: 번1동">
+      </div>
+      <div class="form-group">
+        <label class="form-label">전화번호</label>
+        <input type="text" class="form-control" id="cust-phone" placeholder="010-0000-0000">
+      </div>
+      <button class="btn btn-primary" onclick="submitCustomer()">거래처 등록</button>
+    </div>
+  </div>
+
+  <!-- 모바일 하단 네비게이션 바 -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="dashboard">
+      <span class="icon">📊</span>
+      <span>대시보드</span>
+    </button>
+    <button class="nav-item" data-tab="sales">
+      <span class="icon">🧾</span>
+      <span>오늘판매</span>
+    </button>
+    <button class="nav-item" data-tab="ar">
+      <span class="icon">📝</span>
+      <span>미수관리</span>
+    </button>
+    <button class="nav-item" data-tab="stock">
+      <span class="icon">📦</span>
+      <span>재고현황</span>
+    </button>
+    <button class="nav-item" data-tab="customer">
+      <span class="icon">🏢</span>
+      <span>거래처</span>
+    </button>
+  </nav>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

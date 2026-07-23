@@ -1,0 +1,9 @@
+{
+    "db_mode": "sqlite",
+    "sqlite_path": "G:\\내 드라이브\\종량제봉투_통합DB\\sales.db",
+    "cloud_host": "",
+    "cloud_port": 5432,
+    "cloud_dbname": "garbage_sales",
+    "cloud_user": "postgres",
+    "cloud_password": ""
+}
