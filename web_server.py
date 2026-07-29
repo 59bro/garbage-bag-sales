@@ -101,6 +101,36 @@ async def get_index():
     return HTMLResponse("<h1>웹 프론트엔드 templates/index.html 파일을 찾을 수 없습니다.</h1>", status_code=404)
 
 
+@app.get("/api/health")
+async def health_check():
+    """서버 상태 및 DB 연결 확인."""
+    import os
+    db = customer_logic.db
+    db_mode = getattr(db, 'db_mode', 'unknown')
+    db_url_set = bool(os.environ.get('DATABASE_URL', ''))
+    try:
+        count = db.fetchone("SELECT COUNT(*) AS cnt FROM customers")
+        db_ok = True
+        customer_count = count['cnt'] if count else 0
+    except Exception as e:
+        db_ok = False
+        customer_count = 0
+        return {
+            "status": "error",
+            "db_mode": db_mode,
+            "db_url_env_set": db_url_set,
+            "db_ok": False,
+            "error": str(e)
+        }
+    return {
+        "status": "ok",
+        "db_mode": db_mode,
+        "db_url_env_set": db_url_set,
+        "db_ok": db_ok,
+        "customer_count": customer_count
+    }
+
+
 # ── 대시보드 API ──────────────────────────────────────────────
 @app.get("/api/dashboard")
 async def get_dashboard_summary():
@@ -293,7 +323,8 @@ async def get_ar_balances(search: str = None):
                 "ar_balance": row["outstanding"]
             }
             for row in summary
-            if not search or search.lower() in row["customer_name"].lower()
+            if row["outstanding"] > 0  # 0원 완납 거래처 제외
+            and (not search or search.lower() in row["customer_name"].lower())
         ]
         return {"status": "success", "ar_balances": balances}
     except Exception as e:
