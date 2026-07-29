@@ -103,7 +103,7 @@ function populateSpecCombos(specs) {
   const inboundSpecSelect = document.getElementById('inbound-spec');
 
   const optionsHtml = '<option value="">선택하세요</option>' +
-    specs.map(s => `<option value="${s.id}" data-price="${s.unit_price}">[${s.type_name}] ${s.name} (${fmtCurrency(s.unit_price)})</option>`).join('');
+    specs.map(s => `<option value="${s.id}" data-price="${s.unit_price}">[${s.type_name}] ${s.spec_name} (${fmtCurrency(s.unit_price)})</option>`).join('');
 
   if (saleSpecSelect) {
     saleSpecSelect.innerHTML = optionsHtml;
