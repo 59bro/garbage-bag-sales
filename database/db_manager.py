@@ -90,11 +90,10 @@ class DBManager:
     def _get_pg_connection(self):
         import psycopg2
         import psycopg2.extras
-        conn = psycopg2.connect(
-            host=self.pg_host, port=self.pg_port, dbname=self.pg_db,
-            user=self.pg_user, password=self.pg_pass,
-            sslmode="require"
-        )
+        import urllib.parse
+        pw = urllib.parse.quote(self.pg_pass, safe='')
+        dsn = f"postgresql://{self.pg_user}:{pw}@{self.pg_host}:{self.pg_port}/{self.pg_db}?sslmode=require"
+        conn = psycopg2.connect(dsn)
         conn.autocommit = False
         return conn
 

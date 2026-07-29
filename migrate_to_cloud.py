@@ -18,13 +18,8 @@ PG_DB       = "postgres"
 PG_USER     = "postgres.ycvmncbcudgxlemmkgtb"
 PG_PASSWORD = "Wndudwns6813"
 
-# ── SQLite 경로 (구글 드라이브) ─────────────────────────────
-from utils.db_config_manager import get_db_config
-cfg = get_db_config()
-SQLITE_PATH = cfg.get("sqlite_path", "")
-if not os.path.exists(SQLITE_PATH):
-    from utils.db_config_manager import resolve_sqlite_path
-    SQLITE_PATH = resolve_sqlite_path(SQLITE_PATH)
+# ── SQLite 경로 (구글 드라이브 실제 경로) ────────────────────
+SQLITE_PATH = r"G:\내 드라이브\data\sales.db"
 
 print(f"[INFO] SQLite DB 경로: {SQLITE_PATH}")
 if not os.path.exists(SQLITE_PATH):

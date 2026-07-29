@@ -1,6 +1,6 @@
 {
     "db_mode": "postgres",
-    "sqlite_path": "G:\\내 드라이브\\종량제봉투_통합DB\\sales.db",
+    "sqlite_path": "G:\\내 드라이브\\data\\sales.db",
     "cloud_host": "aws-0-ap-northeast-1.pooler.supabase.com",
     "cloud_port": 6543,
     "cloud_dbname": "postgres",
