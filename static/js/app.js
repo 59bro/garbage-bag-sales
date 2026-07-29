@@ -126,13 +126,44 @@ function populateSpecCombos(specs) {
 function populateCustomerCombos(customers) {
   const saleCustSelect = document.getElementById('sale-customer');
   const collectionCustSelect = document.getElementById('collection-customer');
+  const districtFilter = document.getElementById('sale-district-filter');
 
+  // 동 목록 추출 (중복 제거, 빈값 제외)
+  if (districtFilter) {
+    const districts = [...new Set(
+      customers.filter(c => c.is_active && c.district).map(c => c.district.trim())
+    )].sort();
+    districtFilter.innerHTML = '<option value="">전체 거래처</option>' +
+      districts.map(d => `<option value="${d}">${d}</option>`).join('');
+  }
+
+  // 전체 거래처 옵션 저장
+  window._allCustomers = customers;
+
+  const activeCustomers = customers.filter(c => c.is_active);
   const optionsHtml = '<option value="">선택하세요</option>' +
-    customers.filter(c => c.is_active).map(c => `<option value="${c.id}">[${c.district || '공통'}] ${c.name}</option>`).join('');
+    activeCustomers.map(c => `<option value="${c.id}" data-district="${c.district || ''}">[${c.district || '공통'}] ${c.name}</option>`).join('');
 
   if (saleCustSelect) saleCustSelect.innerHTML = optionsHtml;
   if (collectionCustSelect) collectionCustSelect.innerHTML = optionsHtml;
 }
+
+// 동 필터 변경 시 거래처 목록 갱신
+function onDistrictFilterChange() {
+  const selectedDistrict = document.getElementById('sale-district-filter').value;
+  const saleCustSelect = document.getElementById('sale-customer');
+  if (!saleCustSelect || !window._allCustomers) return;
+
+  const filtered = window._allCustomers.filter(c => {
+    if (!c.is_active) return false;
+    if (!selectedDistrict) return true;
+    return (c.district || '').trim() === selectedDistrict;
+  });
+
+  saleCustSelect.innerHTML = '<option value="">선택하세요</option>' +
+    filtered.map(c => `<option value="${c.id}">[${c.district || '공통'}] ${c.name}</option>`).join('');
+}
+
 
 // ── 1. 대시보드 로드 ─────────────────────────────────────────
 async function loadDashboard() {

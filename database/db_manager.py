@@ -25,10 +25,26 @@ class DBManager:
     def __init__(self):
         if self._initialized:
             return
+
+        # ── 환경변수 DATABASE_URL 우선 (Render 클라우드 배포용) ──
+        db_url = os.environ.get('DATABASE_URL', '')
+        if db_url:
+            self.db_mode = 'postgres'
+            self._pg_dsn = db_url
+            self.pg_host = ''
+            self.pg_port = 6543
+            self.pg_db   = 'postgres'
+            self.pg_user = ''
+            self.pg_pass = ''
+            self.db_path = None
+            self._initialized = True
+            return
+
         from utils.db_config_manager import get_db_config
         cfg = get_db_config()
 
         self.db_mode = cfg.get('db_mode', 'sqlite')
+        self._pg_dsn = ''  # 환경변수 없을 때는 빈 값
 
         if self.db_mode == 'postgres':
             self.pg_host = cfg.get('cloud_host', '')
@@ -90,9 +106,13 @@ class DBManager:
     def _get_pg_connection(self):
         import psycopg2
         import psycopg2.extras
-        import urllib.parse
-        pw = urllib.parse.quote(self.pg_pass, safe='')
-        dsn = f"postgresql://{self.pg_user}:{pw}@{self.pg_host}:{self.pg_port}/{self.pg_db}?sslmode=require"
+        # DATABASE_URL 환경변수로 설정된 DSN 우선 사용
+        if getattr(self, '_pg_dsn', ''):
+            dsn = self._pg_dsn
+        else:
+            import urllib.parse
+            pw = urllib.parse.quote(self.pg_pass, safe='')
+            dsn = f"postgresql://{self.pg_user}:{pw}@{self.pg_host}:{self.pg_port}/{self.pg_db}?sslmode=require"
         conn = psycopg2.connect(dsn)
         conn.autocommit = False
         return conn
