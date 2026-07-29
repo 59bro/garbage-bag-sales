@@ -162,6 +162,33 @@ function calculateTotalAmount() {
 document.getElementById('sale-qty')?.addEventListener('input', calculateTotalAmount);
 document.getElementById('sale-unit-price')?.addEventListener('input', calculateTotalAmount);
 
+// 결제 방법 변경 시 복합결제 입력 UI 표시/숨김
+function onPaymentMethodChange() {
+  const method = document.getElementById('sale-payment-method').value;
+  const mixedArea = document.getElementById('mixed-payment-area');
+  if (!mixedArea) return;
+  if (method === '현금+카드') {
+    mixedArea.style.display = 'block';
+    updateMixedPaymentBalance();
+  } else {
+    mixedArea.style.display = 'none';
+  }
+}
+
+function updateMixedPaymentBalance() {
+  const qty = parseInt(document.getElementById('sale-qty').value || 0);
+  const price = parseInt(document.getElementById('sale-unit-price').value || 0);
+  const total = qty * price;
+  const cash = parseInt(document.getElementById('sale-cash-amount').value || 0);
+  const card = parseInt(document.getElementById('sale-card-amount').value || 0);
+  const balanceEl = document.getElementById('mixed-balance');
+  if (balanceEl) {
+    const diff = total - cash - card;
+    balanceEl.textContent = `합계: ${total.toLocaleString()}원 / 현금+카드: ${(cash+card).toLocaleString()}원 / 차액: ${diff.toLocaleString()}원`;
+    balanceEl.style.color = diff === 0 ? '#27ae60' : '#e74c3c';
+  }
+}
+
 async function submitSale() {
   const date = document.getElementById('sale-date').value;
   const customerId = parseInt(document.getElementById('sale-customer').value);
@@ -176,6 +203,17 @@ async function submitSale() {
     return;
   }
 
+  let cashAmount = 0, cardAmount = 0;
+  if (payMethod === '현금+카드') {
+    cashAmount = parseInt(document.getElementById('sale-cash-amount').value || 0);
+    cardAmount = parseInt(document.getElementById('sale-card-amount').value || 0);
+    const total = qty * unitPrice;
+    if (cashAmount + cardAmount !== total) {
+      alert(`현금(${cashAmount.toLocaleString()}원) + 카드(${cardAmount.toLocaleString()}원) = ${(cashAmount+cardAmount).toLocaleString()}원\n총 결제금액(${total.toLocaleString()}원)과 일치해야 합니다.`);
+      return;
+    }
+  }
+
   try {
     const res = await fetch('/api/sales', {
       method: 'POST',
@@ -187,6 +225,8 @@ async function submitSale() {
         quantity: qty,
         unit_price: unitPrice,
         payment_method: payMethod,
+        cash_amount: cashAmount,
+        card_amount: cardAmount,
         memo: memo
       })
     }).then(r => r.json());
@@ -195,6 +235,13 @@ async function submitSale() {
       alert("✅ 판매 내역이 등록되었습니다.");
       document.getElementById('sale-qty').value = '';
       document.getElementById('sale-memo').value = '';
+      const mixedArea = document.getElementById('mixed-payment-area');
+      if (mixedArea) {
+        document.getElementById('sale-cash-amount').value = '';
+        document.getElementById('sale-card-amount').value = '';
+        mixedArea.style.display = 'none';
+      }
+      document.getElementById('sale-payment-method').value = '현금';
       calculateTotalAmount();
       loadSalesList();
       loadDashboard();
@@ -249,21 +296,33 @@ async function deleteSale(saleId) {
 }
 
 // ── 3. 미수 관리 (AR) ───────────────────────────────────────
+function exportARExcel() {
+  window.location.href = '/api/ar/export';
+}
+
 async function loadARList() {
   const listEl = document.getElementById('ar-list');
   if (!listEl) return;
   try {
     const res = await fetch('/api/ar').then(r => r.json());
     if (res.status === 'success') {
-      listEl.innerHTML = res.ar_balances.map(ar => `
+      const totalAR = res.ar_balances.reduce((s, ar) => s + ar.ar_balance, 0);
+      listEl.innerHTML = `
+        <div class="list-item" style="background:rgba(231,76,60,0.08); border-radius:10px; margin-bottom:8px;">
+          <div><div class="list-item-title">📋 미수금 총합</div></div>
+          <div>
+            <div class="list-item-val red" style="font-size:1.1rem;"><b>${fmtCurrency(totalAR)}</b></div>
+            <button class="btn btn-success btn-sm" onclick="exportARExcel()" style="margin-top:4px;">📥 엑셀 다운로드</button>
+          </div>
+        </div>
+      ` + res.ar_balances.map(ar => `
         <div class="list-item">
           <div>
             <div class="list-item-title">[${ar.district || '공통'}] ${ar.name}</div>
-            <div class="list-item-sub">전화: ${ar.phone || '-'}</div>
           </div>
           <div>
-            <div class="list-item-val ${ar.ar_balance > 0 ? 'red' : ''}">${fmtCurrency(ar.ar_balance)}</div>
-            <button class="btn btn-success btn-sm" onclick="openCollectionModal(${ar.id}, '${ar.name}')" style="margin-top:4px;">수금 입력</button>
+            <div class="list-item-val ${ar.ar_balance > 0 ? 'red' : ''}"><b>${fmtCurrency(ar.ar_balance)}</b></div>
+            <button class="btn btn-success btn-sm" onclick="openCollectionModal(${ar.id}, '${ar.name}')" style="margin-top:4px;">수금</button>
           </div>
         </div>
       `).join('');

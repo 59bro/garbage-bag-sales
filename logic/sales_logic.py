@@ -13,7 +13,7 @@ class SalesLogic:
     # ── 판매 등록 ────────────────────────────────────────────
     def add_sale(self, sale_date: str, customer_id: int, spec_id: int,
                  quantity: int, unit_price: int, payment_method: str,
-                 memo: str = '') -> int:
+                 memo: str = '', cash_amount: int = 0, card_amount: int = 0) -> int:
         """판매 등록 + 재고 출고 자동 반영."""
         total = quantity * unit_price
 
@@ -22,11 +22,11 @@ class SalesLogic:
             """
             INSERT INTO sales
                 (sale_date, customer_id, spec_id, quantity, unit_price,
-                 total_amount, payment_method, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 total_amount, payment_method, cash_amount, card_amount, memo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (sale_date, customer_id, spec_id, quantity, unit_price,
-             total, payment_method, memo)
+             total, payment_method, cash_amount, card_amount, memo)
         )
 
         # 재고 출고 자동 기록

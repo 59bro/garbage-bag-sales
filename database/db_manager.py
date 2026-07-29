@@ -124,6 +124,13 @@ class DBManager:
             if 'product_code' not in spec_cols:
                 conn.execute("ALTER TABLE product_specs ADD COLUMN product_code TEXT DEFAULT ''")
 
+            # sales 테이블에 cash_amount / card_amount 컬럼 추가 (복합결제 지원)
+            sale_cols = [r[1] for r in conn.execute("PRAGMA table_info(sales)")]
+            if 'cash_amount' not in sale_cols:
+                conn.execute("ALTER TABLE sales ADD COLUMN cash_amount INTEGER DEFAULT 0")
+            if 'card_amount' not in sale_cols:
+                conn.execute("ALTER TABLE sales ADD COLUMN card_amount INTEGER DEFAULT 0")
+
             # 재사용봉투 품목 추가
             conn.execute(
                 "INSERT OR IGNORE INTO product_types (name) VALUES ('재사용봉투')"

@@ -4,6 +4,7 @@
 
 import os
 import sys
+import io
 import traceback
 from datetime import datetime
 
@@ -12,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -64,6 +65,8 @@ class SaleCreateSchema(BaseModel):
     quantity: int
     unit_price: int
     payment_method: str = "미수"
+    cash_amount: int = 0
+    card_amount: int = 0
     memo: str = ""
 
 class CustomerCreateSchema(BaseModel):
@@ -229,7 +232,9 @@ async def create_sale(data: SaleCreateSchema):
             quantity=data.quantity,
             unit_price=data.unit_price,
             payment_method=data.payment_method,
-            memo=data.memo
+            memo=data.memo,
+            cash_amount=data.cash_amount,
+            card_amount=data.card_amount
         )
         return {"status": "success", "sale_id": sid, "message": "판매 내역이 등록되었습니다."}
     except ValueError as e:
@@ -308,6 +313,88 @@ async def add_ar_collection(data: ARCollectionSchema):
         return {"status": "success", "collection_id": cid, "message": "수금 내역이 등록되었습니다."}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ar/export")
+async def export_ar_to_excel():
+    """미수금 현황을 엑셀 파일로 다운로드."""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        summary = ar_logic.get_outstanding_summary()
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "미수금현황"
+
+        # 스타일 정의
+        header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True, size=11)
+        center = Alignment(horizontal="center", vertical="center")
+        right = Alignment(horizontal="right", vertical="center")
+        thin = Side(style="thin", color="CCCCCC")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        money_fmt = '#,##0'
+
+        # 타이틀
+        today_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+        ws.merge_cells('A1:F1')
+        ws['A1'] = f"미수금 현황 - 출력일: {today_str}"
+        ws['A1'].font = Font(bold=True, size=14)
+        ws['A1'].alignment = center
+
+        # 헤더
+        headers = ['거래처명', '지역', '초기미수', '판매미수', '수금액', '미수잔액']
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=h)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center
+            cell.border = border
+
+        # 데이터
+        total_outstanding = 0
+        for i, row in enumerate(summary, 4):
+            ws.cell(row=i, column=1, value=row['customer_name']).border = border
+            ws.cell(row=i, column=2, value=row['district']).border = border
+            c3 = ws.cell(row=i, column=3, value=row['initial_ar'])
+            c3.number_format = money_fmt; c3.alignment = right; c3.border = border
+            c4 = ws.cell(row=i, column=4, value=row['sales_credit'])
+            c4.number_format = money_fmt; c4.alignment = right; c4.border = border
+            c5 = ws.cell(row=i, column=5, value=row['total_collected'])
+            c5.number_format = money_fmt; c5.alignment = right; c5.border = border
+            c6 = ws.cell(row=i, column=6, value=row['outstanding'])
+            c6.number_format = money_fmt; c6.alignment = right; c6.border = border
+            c6.font = Font(bold=True, color="E74C3C" if row['outstanding'] > 0 else "27AE60")
+            total_outstanding += row['outstanding']
+
+        # 합계행
+        sum_row = len(summary) + 4
+        ws.cell(row=sum_row, column=1, value='합계').font = Font(bold=True, size=12)
+        c_total = ws.cell(row=sum_row, column=6, value=total_outstanding)
+        c_total.number_format = money_fmt
+        c_total.font = Font(bold=True, size=12, color="E74C3C")
+        c_total.alignment = right
+
+        # 열 너비
+        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['B'].width = 12
+        for c in 'CDEF':
+            ws.column_dimensions[c].width = 16
+
+        # 스트리밍 응답
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"미수금현황_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        )
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

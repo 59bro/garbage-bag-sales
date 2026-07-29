@@ -79,12 +79,28 @@
           </div>
           <div class="form-group">
             <label class="form-label">결제 구별</label>
-            <select class="form-control" id="sale-payment-method">
-              <option value="미수">미수</option>
+            <select class="form-control" id="sale-payment-method" onchange="onPaymentMethodChange()">
               <option value="현금">현금</option>
               <option value="카드">카드</option>
+              <option value="현금+카드">현금+카드 (복합결제)</option>
+              <option value="미수">미수</option>
             </select>
           </div>
+        </div>
+        <!-- 복합결제(현금+카드) 분할 입력 영역 -->
+        <div id="mixed-payment-area" style="display:none; background:rgba(129,140,248,0.08); border-radius:10px; padding:12px; margin-bottom:10px;">
+          <div style="font-weight:600; color:#818cf8; margin-bottom:8px;">💳 현금 + 카드 분할 입력</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">현금 금액 (원)</label>
+              <input type="number" class="form-control" id="sale-cash-amount" placeholder="0" oninput="updateMixedPaymentBalance()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">카드 금액 (원)</label>
+              <input type="number" class="form-control" id="sale-card-amount" placeholder="0" oninput="updateMixedPaymentBalance()">
+            </div>
+          </div>
+          <div id="mixed-balance" style="font-size:0.85rem; padding:4px 0;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">비고/메모</label>
