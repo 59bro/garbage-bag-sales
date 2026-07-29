@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QDateEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QMessageBox, QTabWidget, QFrame
+    QMessageBox, QTabWidget, QFrame, QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
@@ -92,6 +92,12 @@ class ARTab(QWidget):
         btn_init_ar.setStyleSheet("QPushButton { font-weight: bold; color: #ea580c; border: 1px solid #fdba74; background: #fff7ed; } QPushButton:hover { background: #ffedd5; }")
         btn_init_ar.clicked.connect(self._adjust_initial_ar)
         fh.addWidget(btn_init_ar)
+        
+        btn_export = QPushButton("📥 엑셀 다운로드")
+        btn_export.setObjectName("btn_success")
+        btn_export.clicked.connect(self._export_ar_excel)
+        fh.addWidget(btn_export)
+        
         v.addLayout(fh)
 
         c = SectionCard("거래처별 미수 잔액")
@@ -148,6 +154,54 @@ class ARTab(QWidget):
                 elif c == 2 and row.get('initial_ar', 0) != 0:
                     item.setForeground(QColor("#ea580c"))
                 self.tbl_out.setItem(r, c, item)
+        self.tbl_credit_det.setRowCount(0)
+
+    def _export_ar_excel(self):
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, Alignment
+        except ImportError:
+            QMessageBox.warning(self, "경고", "openpyxl 라이브러리가 설치되어 있지 않습니다.\npip install openpyxl 명령어로 설치해주세요.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, "엑셀 다운로드", "미수금현황.xlsx", "Excel Files (*.xlsx)")
+        if not path:
+            return
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "미수금현황"
+        
+        headers = ["거래처", "지역", "초기(이월) 미수", "판매 미수액", "총 수금액", "잔여 미수"]
+        ws.append(headers)
+        
+        for col in range(1, len(headers)+1):
+            cell = ws.cell(row=1, column=col)
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+
+        rows = self.ar_logic.get_outstanding_summary()
+        dist = self.combo_dist_filter.currentData()
+        if dist:
+            rows = [r for r in rows if r.get('district') == dist]
+
+        for row in rows:
+            if row['outstanding'] <= 0:
+                continue # 잔액 0원 이하 제외
+            ws.append([
+                row['customer_name'],
+                row.get('district', ''),
+                row.get('initial_ar', 0),
+                row.get('sales_credit', 0),
+                row['total_collected'],
+                row['outstanding']
+            ])
+
+        try:
+            wb.save(path)
+            QMessageBox.information(self, "완료", f"엑셀 파일이 저장되었습니다.\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"엑셀 저장 중 오류가 발생했습니다:\n{str(e)}")
 
     def _on_select_customer(self):
         rows = self.tbl_out.selectedItems()

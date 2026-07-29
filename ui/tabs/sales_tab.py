@@ -92,12 +92,28 @@ class SalesTab(QWidget):
         self.radio_cash   = QRadioButton("현금")
         self.radio_credit = QRadioButton("미수")
         self.radio_card   = QRadioButton("카드")
+        self.radio_mixed  = QRadioButton("현금+카드")
         self.radio_cash.setChecked(True)
         self.bg_pay = QButtonGroup()
-        for rb in (self.radio_cash, self.radio_credit, self.radio_card):
+        for rb in (self.radio_cash, self.radio_credit, self.radio_card, self.radio_mixed):
             self.bg_pay.addButton(rb); ph.addWidget(rb)
         ph.addStretch()
         g.addWidget(pay_w, 2, 3)
+        
+        # 복합결제 금액 입력란 (기본 숨김)
+        self.w_mixed_amounts = QWidget()
+        mh = QHBoxLayout(self.w_mixed_amounts); mh.setContentsMargins(0,0,0,0)
+        mh.addWidget(fl("현금:"))
+        self.spin_mixed_cash = QSpinBox(); self.spin_mixed_cash.setRange(0, 999999999); self.spin_mixed_cash.setSuffix(" 원")
+        mh.addWidget(self.spin_mixed_cash)
+        mh.addWidget(fl("카드:"))
+        self.spin_mixed_card = QSpinBox(); self.spin_mixed_card.setRange(0, 999999999); self.spin_mixed_card.setSuffix(" 원")
+        mh.addWidget(self.spin_mixed_card)
+        mh.addStretch()
+        self.w_mixed_amounts.setVisible(False)
+        g.addWidget(self.w_mixed_amounts, 3, 2, 1, 2)
+        
+        self.bg_pay.buttonClicked.connect(self._on_pay_method_changed)
 
         hdr.body.addLayout(g)
         root.addWidget(hdr)
@@ -324,12 +340,15 @@ class SalesTab(QWidget):
                 return True # 기본 Tab 이동(테이블 셀 이동) 무시
         return super().eventFilter(obj, event)
 
+    def _on_pay_method_changed(self):
+        is_mixed = self.radio_mixed.isChecked()
+        self.w_mixed_amounts.setVisible(is_mixed)
+
     def _get_payment(self):
         if self.radio_cash.isChecked():   return '현금'
         if self.radio_credit.isChecked(): return '미수'
+        if self.radio_mixed.isChecked():  return '현금+카드'
         return '카드'
-
-
 
     # ─── 저장 및 초기화 ───────────────────────────────────────
     def _clear_bill(self):
@@ -341,9 +360,34 @@ class SalesTab(QWidget):
 
     def _save_bill(self):
         rows = []
+        grand_total = sum(spin.value() * spin.property("unit_price") for spin in self.spin_boxes)
+        
+        pay_method = self._get_payment()
+        cash_amt = 0
+        card_amt = 0
+        
+        if pay_method == '현금+카드':
+            cash_amt = self.spin_mixed_cash.value()
+            card_amt = self.spin_mixed_card.value()
+            if cash_amt + card_amt != grand_total:
+                QMessageBox.warning(self, "경고", f"입력하신 현금/카드 합계가 총 납품 금액과 일치하지 않습니다.\n(입력 합계: {fmt_currency(cash_amt + card_amt)}, 총액: {fmt_currency(grand_total)})")
+                return
+
         for spin in self.spin_boxes:
             qty = spin.value()
             if qty > 0:
+                item_total = qty * spin.property("unit_price")
+                
+                # 복합 결제 금액 분배 (단순히 첫 아이템에 몰아주거나 비율로 나눔)
+                # 현재 백엔드 로직은 각 row별 cash/card amount를 받으므로, 비율대로 배분합니다.
+                if pay_method == '현금+카드':
+                    ratio = item_total / grand_total if grand_total > 0 else 0
+                    row_cash = int(cash_amt * ratio)
+                    row_card = item_total - row_cash
+                else:
+                    row_cash = item_total if pay_method == '현금' else 0
+                    row_card = item_total if pay_method == '카드' else 0
+
                 rows.append({
                     'sale_date':      self.date_edit.date().toString("yyyy-MM-dd"),
                     'customer_id':    self.combo_customer.currentData(),
@@ -353,9 +397,11 @@ class SalesTab(QWidget):
                     'spec_name':      spin.property("spec_name"),
                     'quantity':       qty,
                     'unit_price':     spin.property("unit_price"),
-                    'payment_method': self._get_payment(),
+                    'payment_method': pay_method,
+                    'cash_amount':    row_cash,
+                    'card_amount':    row_card,
                     'memo':           '',
-                    'total_amount':   qty * spin.property("unit_price")
+                    'total_amount':   item_total
                 })
         
         if not rows:
@@ -372,6 +418,7 @@ class SalesTab(QWidget):
             self._clear_bill()
             self.refresh() # 재고 갱신
             QMessageBox.information(self, "저장 완료", f"✓  {count}개 품목의 납품 정보가 저장되었습니다.")
+
         except Exception as e:
             QMessageBox.critical(self, "저장 실패", str(e))
 

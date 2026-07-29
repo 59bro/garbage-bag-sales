@@ -44,7 +44,7 @@ class SalesLogic:
         """
         다중 행 일괄 저장.
         rows: [dict(sale_date, customer_id, spec_id, quantity, unit_price,
-                    payment_method, memo), ...]
+                    payment_method, memo, cash_amount, card_amount), ...]
         반환: 저장된 sale_id 목록
         """
         ids = []
@@ -52,7 +52,7 @@ class SalesLogic:
             sid = self.add_sale(
                 r['sale_date'], r['customer_id'], r['spec_id'],
                 r['quantity'], r['unit_price'], r['payment_method'],
-                r.get('memo', '')
+                r.get('memo', ''), r.get('cash_amount', 0), r.get('card_amount', 0)
             )
             ids.append(sid)
         return ids
