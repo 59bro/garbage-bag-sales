@@ -51,7 +51,7 @@ class ProductLogic:
                 FROM product_specs ps
                 JOIN product_types pt ON ps.type_id = pt.id
                 WHERE ps.type_id = ?
-                ORDER BY CAST(ps.spec_name AS INTEGER), ps.spec_name
+                ORDER BY LENGTH(ps.spec_name), ps.spec_name
             """
         else:
             sql = """
@@ -59,7 +59,7 @@ class ProductLogic:
                 FROM product_specs ps
                 JOIN product_types pt ON ps.type_id = pt.id
                 WHERE ps.type_id = ? AND ps.is_active = 1
-                ORDER BY CAST(ps.spec_name AS INTEGER), ps.spec_name
+                ORDER BY LENGTH(ps.spec_name), ps.spec_name
             """
         return self.db.fetchall(sql, (type_id,))
 
@@ -70,7 +70,7 @@ class ProductLogic:
             FROM product_specs ps
             JOIN product_types pt ON ps.type_id = pt.id
             {where}
-            ORDER BY pt.id, CAST(ps.spec_name AS INTEGER), ps.spec_name
+            ORDER BY pt.id, LENGTH(ps.spec_name), ps.spec_name
         """
         return self.db.fetchall(sql)
 
