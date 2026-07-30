@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1100, 740)
         self.setStyleSheet(APP_STYLE)
         self._nav_buttons = []
+        self._tab_initialized = [False] * len(self.NAV_ITEMS)  # 탭별 초기화 여부
         self._build_ui()
         self._start_clock()
         self._switch_page(0)
@@ -136,14 +137,22 @@ class MainWindow(QMainWindow):
         rv.addWidget(self.header)
 
         self.stack = QStackedWidget()
+        # 지연 로딩: 시작 시 SalesTab만 초기화, 나머지는 빈 placeholder
         self.tab_sales    = SalesTab()
-        self.tab_stock    = StockTab()
-        self.tab_search   = SearchTab()
-        self.tab_ar       = ARTab()
-        self.tab_vehicle  = VehicleTab()
-        self.tab_settings = SettingsTab()
-        for tab in (self.tab_sales, self.tab_stock, self.tab_search,
-                    self.tab_ar, self.tab_vehicle, self.tab_settings):
+        self._tab_initialized[0] = True
+
+        # 나머지 탭들은 빈 위젯으로 대체 (첫 클릭 시 실제 탭으로 교체)
+        self.tab_stock    = QWidget()
+        self.tab_search   = QWidget()
+        self.tab_ar       = QWidget()
+        self.tab_vehicle  = QWidget()
+        self.tab_settings = QWidget()
+
+        self._tab_list = [
+            self.tab_sales, self.tab_stock, self.tab_search,
+            self.tab_ar, self.tab_vehicle, self.tab_settings
+        ]
+        for tab in self._tab_list:
             self.stack.addWidget(tab)
         rv.addWidget(self.stack)
         h.addWidget(right)
@@ -169,6 +178,20 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(msg)
 
     def _switch_page(self, idx: int):
+        # 지연 로딩: 첫 접근 시 탭을 실제로 생성
+        if not self._tab_initialized[idx]:
+            self._tab_initialized[idx] = True
+            tab_classes = [SalesTab, StockTab, SearchTab, ARTab, VehicleTab, SettingsTab]
+            new_tab = tab_classes[idx]()
+            old_widget = self.stack.widget(idx)
+            self.stack.removeWidget(old_widget)
+            old_widget.deleteLater()
+            self.stack.insertWidget(idx, new_tab)
+            self._tab_list[idx] = new_tab
+            # 탭 참조 업데이트
+            attr_names = ['tab_sales', 'tab_stock', 'tab_search', 'tab_ar', 'tab_vehicle', 'tab_settings']
+            setattr(self, attr_names[idx], new_tab)
+
         self.stack.setCurrentIndex(idx)
         icon, title, subtitle = self.NAV_ITEMS[idx]
         self.lbl_title.setText(f"{icon}  {title}")
@@ -178,10 +201,6 @@ class MainWindow(QMainWindow):
             btn.setObjectName("nav_btn_active" if i == idx else "nav_btn")
             btn.setStyleSheet("")
 
-        tab = self.stack.currentWidget()
-        if hasattr(tab, 'refresh'):
-            tab.refresh()
-
     def _start_clock(self):
         self._update_clock()
         t = QTimer(self); t.timeout.connect(self._update_clock); t.start(1000)
@@ -190,7 +209,7 @@ class MainWindow(QMainWindow):
         self.lbl_clock.setText(datetime.now().strftime("%Y. %m. %d   %H : %M : %S"))
 
     def refresh_all_tabs(self):
-        for tab in (self.tab_sales, self.tab_stock, self.tab_search, self.tab_ar, self.tab_vehicle):
+        for tab in self._tab_list:
             if hasattr(tab, 'refresh'):
                 tab.refresh()
         self._update_status_db_info()
