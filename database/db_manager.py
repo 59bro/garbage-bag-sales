@@ -106,6 +106,18 @@ class DBManager:
     def _get_pg_connection(self):
         import psycopg2
         import psycopg2.extras
+        # ── 커넥션 풀링: 기존 연결이 살아있으면 재사용 ──
+        if hasattr(self, '_pg_conn') and self._pg_conn and not self._pg_conn.closed:
+            try:
+                # 연결 상태 확인 (끊어졌으면 재연결)
+                self._pg_conn.cursor().execute("SELECT 1")
+                return self._pg_conn
+            except Exception:
+                try:
+                    self._pg_conn.close()
+                except Exception:
+                    pass
+
         # DATABASE_URL 환경변수로 설정된 DSN 우선 사용
         if getattr(self, '_pg_dsn', ''):
             dsn = self._pg_dsn
@@ -115,7 +127,17 @@ class DBManager:
             dsn = f"postgresql://{self.pg_user}:{pw}@{self.pg_host}:{self.pg_port}/{self.pg_db}?sslmode=require"
         conn = psycopg2.connect(dsn)
         conn.autocommit = False
+        self._pg_conn = conn
         return conn
+
+    def _close_pg_connection(self):
+        """PostgreSQL 연결 명시적 종료 (앱 종료 시 호출)."""
+        if hasattr(self, '_pg_conn') and self._pg_conn and not self._pg_conn.closed:
+            try:
+                self._pg_conn.close()
+            except Exception:
+                pass
+            self._pg_conn = None
 
     def _initialize_db(self):
         with self.get_connection() as conn:
@@ -191,8 +213,13 @@ class DBManager:
                 result = [dict(row) for row in cur.fetchall()]
                 cur.close()
                 return result
-            finally:
-                conn.close()
+            except Exception as e:
+                conn.rollback()
+                # 연결 끊김이면 재연결 시도
+                if 'closed' in str(e).lower() or 'connection' in str(e).lower():
+                    self._pg_conn = None
+                    return self.fetchall(self._convert_sql(sql.replace('%s', '?')), params)
+                raise
         else:
             with self.get_connection() as conn:
                 cur = conn.execute(sql, params)
@@ -209,8 +236,12 @@ class DBManager:
                 row = cur.fetchone()
                 cur.close()
                 return dict(row) if row else None
-            finally:
-                conn.close()
+            except Exception as e:
+                conn.rollback()
+                if 'closed' in str(e).lower() or 'connection' in str(e).lower():
+                    self._pg_conn = None
+                    return self.fetchone(self._convert_sql(sql.replace('%s', '?')), params)
+                raise
         else:
             with self.get_connection() as conn:
                 cur = conn.execute(sql, params)
@@ -235,8 +266,6 @@ class DBManager:
             except Exception:
                 conn.rollback()
                 raise
-            finally:
-                conn.close()
         else:
             with self.get_connection() as conn:
                 cur = conn.execute(sql, params)
@@ -256,9 +285,8 @@ class DBManager:
             except Exception:
                 conn.rollback()
                 raise
-            finally:
-                conn.close()
         else:
             with self.get_connection() as conn:
                 conn.executemany(sql, params_list)
                 conn.commit()
+
