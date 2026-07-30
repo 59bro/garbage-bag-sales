@@ -66,6 +66,19 @@ class ARLogic:
             ORDER BY s.sale_date DESC
         """, tuple(params))
 
+    def get_credit_by_date_grouped(self, customer_id: int) -> list:
+        """거래처별 미수 판매를 날짜별로 그룹핑하여 반환."""
+        return self.db.fetchall("""
+            SELECT s.sale_date,
+                   COUNT(*) AS item_count,
+                   SUM(s.quantity) AS total_qty,
+                   SUM(s.total_amount) AS total_amount
+            FROM sales s
+            WHERE s.customer_id = ? AND s.payment_method = '미수'
+            GROUP BY s.sale_date
+            ORDER BY s.sale_date DESC
+        """, (customer_id,))
+
     # ── 수금 ─────────────────────────────────────────────────
     def add_collection(self, collection_date: str, customer_id: int,
                        amount: int, payment_method: str, memo: str = '') -> int:

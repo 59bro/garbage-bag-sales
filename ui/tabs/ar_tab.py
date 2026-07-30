@@ -97,6 +97,12 @@ class ARTab(QWidget):
         btn_export.setObjectName("btn_success")
         btn_export.clicked.connect(self._export_ar_excel)
         fh.addWidget(btn_export)
+
+        btn_print = QPushButton("🖨️ 인쇄")
+        btn_print.setObjectName("btn_ghost")
+        btn_print.setStyleSheet("QPushButton { font-weight: bold; color: #4338ca; border: 1px solid #a5b4fc; background: #eef2ff; } QPushButton:hover { background: #e0e7ff; }")
+        btn_print.clicked.connect(self._print_ar_list)
+        fh.addWidget(btn_print)
         
         v.addLayout(fh)
 
@@ -117,6 +123,8 @@ class ARTab(QWidget):
 
         # 거래처 클릭 시 → 미수 판매 상세 표시
         self.tbl_out.itemSelectionChanged.connect(self._on_select_customer)
+        # 거래처 더블클릭 시 → 날짜별 그룹 상세
+        self.tbl_out.cellDoubleClicked.connect(self._on_double_click_customer)
 
         detail_c = SectionCard("미수 판매 상세 내역 (선택한 거래처)")
         self.tbl_credit_det = self._tbl(
@@ -124,6 +132,15 @@ class ARTab(QWidget):
         )
         detail_c.add_widget(self.tbl_credit_det)
         v.addWidget(detail_c)
+
+        # 날짜별 그룹 상세 (tab 1 더블클릭 시)
+        date_grp_c = SectionCard("📅 날짜별 미수 금액 (더블클릭 시 표시)")
+        self.tbl_date_group = self._tbl(
+            ['납품일자', '품목 수', '총 수량', '미수 금액']
+        )
+        date_grp_c.add_widget(self.tbl_date_group)
+        v.addWidget(date_grp_c)
+
         self._load_outstanding()
         return w
 
@@ -159,7 +176,7 @@ class ARTab(QWidget):
     def _export_ar_excel(self):
         try:
             import openpyxl
-            from openpyxl.styles import Font, Alignment
+            from openpyxl.styles import Font, Alignment, Border, Side, PatternFill, numbers
         except ImportError:
             QMessageBox.warning(self, "경고", "openpyxl 라이브러리가 설치되어 있지 않습니다.\npip install openpyxl 명령어로 설치해주세요.")
             return
@@ -175,19 +192,31 @@ class ARTab(QWidget):
         headers = ["거래처", "지역", "초기(이월) 미수", "판매 미수액", "총 수금액", "잔여 미수"]
         ws.append(headers)
         
+        # 헤더 스타일
+        header_font = Font(bold=True, size=11, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_align = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+        
         for col in range(1, len(headers)+1):
             cell = ws.cell(row=1, column=col)
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+            cell.border = thin_border
 
         rows = self.ar_logic.get_outstanding_summary()
         dist = self.combo_dist_filter.currentData()
         if dist:
             rows = [r for r in rows if r.get('district') == dist]
 
+        data_row = 2
         for row in rows:
             if row['outstanding'] <= 0:
-                continue # 잔액 0원 이하 제외
+                continue
             ws.append([
                 row['customer_name'],
                 row.get('district', ''),
@@ -196,12 +225,92 @@ class ARTab(QWidget):
                 row['total_collected'],
                 row['outstanding']
             ])
+            # 데이터 셀 테두리 & 정렬
+            for col in range(1, len(headers)+1):
+                cell = ws.cell(row=data_row, column=col)
+                cell.border = thin_border
+                if col >= 3:  # 금액 열들
+                    cell.number_format = '#,##0'
+                    cell.alignment = Alignment(horizontal="right", vertical="center")
+                else:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+            # 잔여 미수 셀 강조
+            amt_cell = ws.cell(row=data_row, column=6)
+            amt_cell.font = Font(bold=True, color="FF0000")
+            data_row += 1
+
+        # 셀 너비 자동 조정
+        for col_cells in ws.columns:
+            max_length = 0
+            col_letter = col_cells[0].column_letter
+            for cell in col_cells:
+                try:
+                    cell_len = len(str(cell.value or ''))
+                    if cell_len > max_length:
+                        max_length = cell_len
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = max(max_length + 4, 12)
+
+        # 행 높이 조정
+        for row_obj in ws.iter_rows(min_row=1, max_row=ws.max_row):
+            ws.row_dimensions[row_obj[0].row].height = 22
 
         try:
             wb.save(path)
             QMessageBox.information(self, "완료", f"엑셀 파일이 저장되었습니다.\n{path}")
         except Exception as e:
             QMessageBox.critical(self, "오류", f"엑셀 저장 중 오류가 발생했습니다:\n{str(e)}")
+
+    def _print_ar_list(self):
+        """HTML 기반 미수금 현황 인쇄."""
+        from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog
+        from PyQt5.QtGui import QTextDocument
+        from datetime import date as dt_date
+
+        rows = self.ar_logic.get_outstanding_summary()
+        dist = self.combo_dist_filter.currentData()
+        if dist:
+            rows = [r for r in rows if r.get('district') == dist]
+        rows = [r for r in rows if r['outstanding'] > 0]
+
+        today_str = dt_date.today().strftime('%Y-%m-%d')
+        total_ar = sum(r['outstanding'] for r in rows)
+
+        html = f"""
+        <h2 style='text-align:center; margin-bottom:4px;'>미수금 현황 보고서</h2>
+        <p style='text-align:center; color:#666; margin-top:0;'>출력일: {today_str} | 총 미수금: <b style='color:red;'>{fmt_currency(total_ar)}</b></p>
+        <table border='1' cellspacing='0' cellpadding='5' width='100%' style='border-collapse:collapse; font-size:10pt;'>
+        <tr style='background:#4472C4; color:white; font-weight:bold; text-align:center;'>
+            <th>거래처</th><th>지역</th><th>초기(이월) 미수</th>
+            <th>판매 미수액</th><th>총 수금액</th><th>잔여 미수</th>
+        </tr>
+        """
+        for r in rows:
+            html += f"""
+            <tr style='text-align:center;'>
+                <td>{r['customer_name']}</td>
+                <td>{r.get('district','')}</td>
+                <td style='text-align:right;'>{fmt_currency(r.get('initial_ar',0))}</td>
+                <td style='text-align:right;'>{fmt_currency(r.get('sales_credit',0))}</td>
+                <td style='text-align:right;'>{fmt_currency(r['total_collected'])}</td>
+                <td style='text-align:right; color:red; font-weight:bold;'>{fmt_currency(r['outstanding'])}</td>
+            </tr>
+            """
+        html += "</table>"
+
+        doc = QTextDocument()
+        doc.setHtml(html)
+
+        def preview_paint(printer):
+            doc.print_(printer)
+
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setPageOrientation(1)  # Landscape
+        dialog = QPrintPreviewDialog(printer, self)
+        dialog.setWindowTitle("미수금 현황 인쇄 미리보기")
+        dialog.paintRequested.connect(preview_paint)
+        dialog.exec_()
 
     def _on_select_customer(self):
         rows = self.tbl_out.selectedItems()
@@ -221,6 +330,28 @@ class ARTab(QWidget):
                 item = QTableWidgetItem(str(val))
                 item.setTextAlignment(Qt.AlignCenter)
                 self.tbl_credit_det.setItem(r, c, item)
+
+    def _on_double_click_customer(self, row, col):
+        """거래처 더블클릭 시 날짜별 그룹 상세 표시."""
+        if row < 0 or row >= len(self.tbl_out_cust_ids):
+            return
+        cid = self.tbl_out_cust_ids[row]
+        cust_name = self.tbl_out.item(row, 0).text() if self.tbl_out.item(row, 0) else ''
+        date_rows = self.ar_logic.get_credit_by_date_grouped(cid)
+        self.tbl_date_group.setRowCount(len(date_rows))
+        for r, dr in enumerate(date_rows):
+            vals = [
+                dr['sale_date'],
+                fmt_number(dr['item_count']) + '건',
+                fmt_number(dr['total_qty']),
+                fmt_currency(dr['total_amount'])
+            ]
+            for c, val in enumerate(vals):
+                item = QTableWidgetItem(str(val))
+                item.setTextAlignment(Qt.AlignCenter)
+                if c == 3:  # 금액 강조
+                    item.setForeground(QColor("#ef4444"))
+                self.tbl_date_group.setItem(r, c, item)
 
     def _add_collection(self, cid=None):
         dlg = ARCollectionDialog(self, customer_id=cid)

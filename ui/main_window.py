@@ -154,13 +154,18 @@ class MainWindow(QMainWindow):
 
     def _update_status_db_info(self):
         from database.db_manager import DBManager
-        path = DBManager().db_path
-        if "드라이브" in path or "Drive" in path or "OneDrive" in path:
-            msg = f"  ●  [☁️ 구글 드라이브(클라우드) 실시간 연동 중]  {path}"
-            self.status_bar.setStyleSheet("color: #1d4ed8; font-weight: bold; background: #eff6ff;")
+        db = DBManager()
+        if db.db_mode == 'postgres':
+            msg = "  ●  [☁️ 클라우드 (Supabase) DB 접속 중]"
+            self.status_bar.setStyleSheet("color: #10b981; font-weight: bold; background: #ecfdf5;")
         else:
-            msg = f"  ●  [💻 로컬/공유 PC DB 접속 중]  {path}"
-            self.status_bar.setStyleSheet("color: #334155;")
+            path = db.db_path or ""
+            if "드라이브" in path or "Drive" in path or "OneDrive" in path:
+                msg = f"  ●  [☁️ 구글 드라이브 실시간 연동 중]  {path}"
+                self.status_bar.setStyleSheet("color: #1d4ed8; font-weight: bold; background: #eff6ff;")
+            else:
+                msg = f"  ●  [💻 로컬/공유 PC DB 접속 중]  {path}"
+                self.status_bar.setStyleSheet("color: #334155;")
         self.status_bar.showMessage(msg)
 
     def _switch_page(self, idx: int):
