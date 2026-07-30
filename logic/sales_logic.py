@@ -169,9 +169,13 @@ class SalesLogic:
                 COUNT(DISTINCT customer_id)                     AS sale_count,
                 COALESCE(SUM(quantity), 0)                      AS total_qty,
                 COALESCE(SUM(total_amount), 0)                  AS total_amount,
-                COALESCE(SUM(CASE WHEN payment_method='현금' THEN total_amount ELSE 0 END), 0) AS cash,
+                COALESCE(SUM(CASE WHEN payment_method='현금' THEN total_amount
+                                  WHEN payment_method='현금+카드' THEN COALESCE(cash_amount, 0)
+                                  ELSE 0 END), 0) AS cash,
                 COALESCE(SUM(CASE WHEN payment_method='미수'  THEN total_amount ELSE 0 END), 0) AS credit,
-                COALESCE(SUM(CASE WHEN payment_method='카드' THEN total_amount ELSE 0 END), 0) AS card
+                COALESCE(SUM(CASE WHEN payment_method='카드' THEN total_amount
+                                  WHEN payment_method='현금+카드' THEN COALESCE(card_amount, 0)
+                                  ELSE 0 END), 0) AS card
             FROM sales
             WHERE sale_date = ?
             """,
