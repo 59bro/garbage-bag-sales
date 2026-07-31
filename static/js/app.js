@@ -513,6 +513,62 @@ async function submitCollection() {
   }
 }
 
+// ── 수금 내역 확인/삭제 ─────────────────────────────────────────
+async function openCollectionHistoryModal() {
+  const modal = document.getElementById('collection-history-modal');
+  const listEl = document.getElementById('collection-history-list');
+  if (!modal || !listEl) return;
+  
+  modal.classList.add('active');
+  listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">불러오는 중...</div></div>';
+  
+  try {
+    const res = await fetch('/api/ar/collection').then(r => r.json());
+    if (res.status === 'success') {
+      if (res.collections.length === 0) {
+        listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">최근 수금 내역이 없습니다.</div></div>';
+        return;
+      }
+      
+      listEl.innerHTML = res.collections.map(c => `
+        <div class="list-item">
+          <div>
+            <div class="list-item-title">[${c.district || '공통'}] ${c.customer_name}</div>
+            <div class="list-item-sub">${c.collection_date} · ${c.payment_method}</div>
+            ${c.memo ? `<div class="list-item-sub" style="color:#64748b; font-size:0.8rem;">📝 ${c.memo}</div>` : ''}
+          </div>
+          <div style="text-align:right;">
+            <div class="list-item-val" style="color:#10b981;"><b>${fmtCurrency(c.amount)}</b></div>
+            <button class="btn btn-danger btn-sm" onclick="deleteCollectionHistory(${c.id})" style="margin-top:4px;">취소(삭제)</button>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    listEl.innerHTML = `<div class="list-item"><div class="list-item-sub" style="color:#ef4444;">오류: ${err}</div></div>`;
+  }
+}
+
+async function deleteCollectionHistory(colId) {
+  if (!confirm("해당 수금 내역을 삭제하시겠습니까?\n(삭제 시 미수 잔액이 원래대로 복구됩니다.)")) return;
+  
+  try {
+    const res = await fetch(`/api/ar/collection/${colId}`, { method: 'DELETE' }).then(r => r.json());
+    if (res.status === 'success') {
+      alert("✅ 삭제되었습니다.");
+      // 모달 다시 로드
+      openCollectionHistoryModal();
+      // 미수 현황 갱신
+      loadARList();
+      loadDashboard();
+    } else {
+      alert("삭제 실패: " + res.detail);
+    }
+  } catch (err) {
+    alert("서버 오류: " + err);
+  }
+}
+
 // ── 4. 재고 관리 ─────────────────────────────────────────────
 async function loadStockList() {
   const listEl = document.getElementById('stock-list');

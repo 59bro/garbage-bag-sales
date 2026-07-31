@@ -160,7 +160,10 @@
       <div class="card">
         <div class="card-title">
           <span>📝 거래처별 미수금 현황</span>
-          <button class="btn btn-outline btn-sm" onclick="loadARList()">🔄 새로고침</button>
+          <div>
+            <button class="btn btn-primary btn-sm" onclick="openCollectionHistoryModal()">🕰️ 내역보기</button>
+            <button class="btn btn-outline btn-sm" onclick="loadARList()">🔄 새로고침</button>
+          </div>
         </div>
         <div class="data-list" id="ar-list">
           <div class="list-item"><div class="list-item-sub">로딩 중...</div></div>
@@ -233,6 +236,19 @@
         <input type="text" class="form-control" id="collection-memo" placeholder="수금 메모 (선택)">
       </div>
       <button class="btn btn-success" onclick="submitCollection()">수금 저장</button>
+    </div>
+  </div>
+
+  <!-- 수금 내역 확인/삭제 모달 -->
+  <div class="modal-overlay" id="collection-history-modal">
+    <div class="modal-box" style="max-height:80vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <div class="modal-title">🕰️ 최근 수금 내역</div>
+        <button class="close-btn" onclick="closeModal('collection-history-modal')">&times;</button>
+      </div>
+      <div class="data-list" id="collection-history-list" style="overflow-y:auto; flex:1; margin-top:10px;">
+        <div class="list-item"><div class="list-item-sub">수금 내역을 불러오는 중...</div></div>
+      </div>
     </div>
   </div>
 

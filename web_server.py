@@ -348,6 +348,26 @@ async def add_ar_collection(data: ARCollectionSchema):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/ar/collection")
+async def get_ar_collections(customer_id: int = None, limit: int = 50):
+    try:
+        cols = ar_logic.get_collections(customer_id=customer_id)
+        # 제한된 갯수만 반환 (모바일에서 최근 내역 확인용)
+        return {"status": "success", "collections": cols[:limit]}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/ar/collection/{col_id}")
+async def delete_ar_collection(col_id: int):
+    try:
+        ar_logic.delete_collection(col_id)
+        return {"status": "success", "message": "수금 내역이 삭제/취소되었습니다."}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.get("/api/ar/export")
 async def export_ar_to_excel():
