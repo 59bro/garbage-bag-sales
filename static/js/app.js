@@ -29,10 +29,14 @@ function setDefaultDates() {
   const saleDateInput = document.getElementById('sale-date');
   const collectionDateInput = document.getElementById('collection-date');
   const inboundDateInput = document.getElementById('inbound-date');
+  const searchStartInput = document.getElementById('search-start-date');
+  const searchEndInput = document.getElementById('search-end-date');
   
   if (saleDateInput) saleDateInput.value = today;
   if (collectionDateInput) collectionDateInput.value = today;
   if (inboundDateInput) inboundDateInput.value = today;
+  if (searchStartInput) searchStartInput.value = today;
+  if (searchEndInput) searchEndInput.value = today;
 }
 
 // ── 모바일 네비게이션 탭 전환 ─────────────────────────────
@@ -146,6 +150,13 @@ function populateCustomerCombos(customers) {
 
   if (saleCustSelect) saleCustSelect.innerHTML = optionsHtml;
   if (collectionCustSelect) collectionCustSelect.innerHTML = optionsHtml;
+
+  // 검색 거래처 드롭다운 (전체 거래처 옵션 포함)
+  const searchCustSelect = document.getElementById('search-customer');
+  if (searchCustSelect) {
+    searchCustSelect.innerHTML = '<option value="">전체 거래처</option>' +
+      activeCustomers.map(c => `<option value="${c.id}">[${c.district || '공통'}] ${c.name}</option>`).join('');
+  }
 }
 
 // 동 필터 변경 시 거래처 목록 갱신
@@ -288,6 +299,9 @@ async function loadSalesList() {
   const listEl = document.getElementById('sales-list');
   if (!listEl) return;
   const today = new Date().toISOString().split('T')[0];
+  // 요약 숨기기
+  const summaryEl = document.getElementById('search-summary');
+  if (summaryEl) summaryEl.style.display = 'none';
   try {
     const res = await fetch(`/api/sales?date=${today}`).then(r => r.json());
     if (res.status === 'success') {
@@ -310,6 +324,59 @@ async function loadSalesList() {
     }
   } catch (err) {
     console.error("판매 내역 로드 실패:", err);
+  }
+}
+
+async function searchSalesHistory() {
+  const startDate = document.getElementById('search-start-date').value;
+  const endDate = document.getElementById('search-end-date').value;
+  const customerId = document.getElementById('search-customer').value;
+  const listEl = document.getElementById('sales-list');
+  if (!listEl) return;
+
+  if (!startDate || !endDate) {
+    alert('시작일과 종료일을 입력해주세요.');
+    return;
+  }
+
+  let url = `/api/sales?start_date=${startDate}&end_date=${endDate}`;
+  if (customerId) url += `&customer_id=${customerId}`;
+
+  listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">조회 중...</div></div>';
+
+  try {
+    const res = await fetch(url).then(r => r.json());
+    if (res.status === 'success') {
+      // 요약 표시
+      const summaryEl = document.getElementById('search-summary');
+      if (summaryEl) {
+        const totalQty = res.sales.reduce((s, r) => s + (r.quantity || 0), 0);
+        const totalAmt = res.sales.reduce((s, r) => s + (r.total_amount || 0), 0);
+        document.getElementById('search-count').textContent = res.sales.length;
+        document.getElementById('search-qty').textContent = totalQty.toLocaleString();
+        document.getElementById('search-total').textContent = fmtCurrency(totalAmt);
+        summaryEl.style.display = 'block';
+      }
+
+      if (res.sales.length === 0) {
+        listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">해당 기간에 판매 내역이 없습니다.</div></div>';
+        return;
+      }
+      listEl.innerHTML = res.sales.map(s => `
+        <div class="list-item">
+          <div>
+            <div class="list-item-title">${s.customer_name} <span class="badge badge-blue">${s.payment_method}</span></div>
+            <div class="list-item-sub">${s.sale_date} · [${s.type_name}] ${s.spec_name} · ${fmtQty(s.quantity)}</div>
+          </div>
+          <div>
+            <div class="list-item-val">${fmtCurrency(s.total_amount)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('판매 이력 조회 실패:', err);
+    listEl.innerHTML = '<div class="list-item"><div class="list-item-sub" style="color:#ef4444;">조회 실패: ' + err + '</div></div>';
   }
 }
 

@@ -116,12 +116,38 @@
       </div>
     </section>
 
-    <!-- 2. 오늘 판매 내역 탭 -->
+    <!-- 2. 판매 조회 탭 -->
     <section id="tab-sales" class="tab-content">
       <div class="card">
         <div class="card-title">
-          <span>📅 오늘 판매 내역</span>
-          <button class="btn btn-outline btn-sm" onclick="loadSalesList()">🔄 새로고침</button>
+          <span>🔍 판매 이력 조회</span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">시작일</label>
+            <input type="date" class="form-control" id="search-start-date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">종료일</label>
+            <input type="date" class="form-control" id="search-end-date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">거래처 선택 (선택사항)</label>
+          <select class="form-control" id="search-customer">
+            <option value="">전체 거래처</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <button class="btn btn-primary" onclick="searchSalesHistory()" style="flex:1;">🔍 조회</button>
+          <button class="btn btn-outline" onclick="loadSalesList()" style="flex:1;">📅 오늘 내역</button>
+        </div>
+        <div id="search-summary" style="display:none; background:rgba(99,102,241,0.08); border-radius:10px; padding:10px 14px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+            <span>📋 <strong id="search-count">0</strong>건</span>
+            <span>📦 <strong id="search-qty">0</strong>개</span>
+            <span>💰 <strong id="search-total" style="color:#818cf8;">0원</strong></span>
+          </div>
         </div>
         <div class="data-list" id="sales-list">
           <div class="list-item"><div class="list-item-sub">로딩 중...</div></div>
@@ -242,8 +268,8 @@
       <span>대시보드</span>
     </button>
     <button class="nav-item" data-tab="sales">
-      <span class="icon">🧾</span>
-      <span>오늘판매</span>
+      <span class="icon">🔍</span>
+      <span>판매조회</span>
     </button>
     <button class="nav-item" data-tab="ar">
       <span class="icon">📝</span>
