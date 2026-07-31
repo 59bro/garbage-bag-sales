@@ -87,11 +87,12 @@ class ARCollectionDialog(QDialog):
         self.date_edit.setDisplayFormat("yyyy-MM-dd")
         form.addRow(fl("수금일 *"), self.date_edit)
 
-        # 수금액
+        # 수금액 (미수 잔액이 자동 입력됨, 부분수금 시 수정 가능)
         self.spin_amount = QSpinBox()
         self.spin_amount.setRange(1, 999_999_999)
         self.spin_amount.setSuffix("  원")
         self.spin_amount.setSingleStep(10000)
+        self._current_balance = 0  # 현재 미수 잔액 저장
         form.addRow(fl("수금액 *"), self.spin_amount)
 
         # 수금방법
@@ -134,11 +135,16 @@ class ARCollectionDialog(QDialog):
         if cid is None:
             return
         balance = self.ar_logic.get_customer_outstanding(cid)
+        self._current_balance = balance
         self.lbl_balance.setText(fmt_currency(balance))
         color = "#ef4444" if balance > 0 else "#10b981"
         self.lbl_balance.setStyleSheet(
             f"color:{color}; font-size:14pt; font-weight:bold; background:transparent; border:none;"
         )
+        # 수금액을 미수 잔액으로 자동 설정 (0 이하이면 1로)
+        self.spin_amount.blockSignals(True)
+        self.spin_amount.setValue(max(balance, 1))
+        self.spin_amount.blockSignals(False)
 
     def _save(self):
         cid    = self.combo_cust.currentData()
@@ -146,6 +152,20 @@ class ARCollectionDialog(QDialog):
         amount = self.spin_amount.value()
         method = self.combo_method.currentData()
         memo   = self.edit_memo.text().strip()
+
+        # 미수 잔액보다 큰 금액 입력 방지
+        if amount > self._current_balance:
+            reply = QMessageBox.warning(
+                self, "수금액 초과",
+                f"현재 미수 잔액은 {fmt_currency(self._current_balance)}입니다.\n"
+                f"입력하신 수금액 {fmt_currency(amount)}이(가) 잔액을 초과합니다.\n\n"
+                f"그래도 저장하시겠습니까?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
         try:
             self.ar_logic.add_collection(date, cid, amount, method, memo)
             self.accept()

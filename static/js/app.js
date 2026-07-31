@@ -398,12 +398,15 @@ function exportARExcel() {
   window.location.href = '/api/ar/export';
 }
 
+let globalARBalances = [];
+
 async function loadARList() {
   const listEl = document.getElementById('ar-list');
   if (!listEl) return;
   try {
     const res = await fetch('/api/ar').then(r => r.json());
     if (res.status === 'success') {
+      globalARBalances = res.ar_balances;
       const totalAR = res.ar_balances.reduce((s, ar) => s + ar.ar_balance, 0);
       listEl.innerHTML = `
         <div class="list-item" style="background:rgba(231,76,60,0.08); border-radius:10px; margin-bottom:8px;">
@@ -433,8 +436,30 @@ async function loadARList() {
 function openCollectionModal(custId, custName) {
   const modal = document.getElementById('collection-modal');
   const select = document.getElementById('collection-customer');
-  if (select) select.value = custId;
+  if (select) {
+    select.value = custId;
+    onCollectionCustomerChange(); // 잔액 업데이트
+  }
   if (modal) modal.classList.add('active');
+}
+
+function onCollectionCustomerChange() {
+  const select = document.getElementById('collection-customer');
+  const balanceEl = document.getElementById('collection-current-balance');
+  const amountInput = document.getElementById('collection-amount');
+  
+  if (!select || !balanceEl || !amountInput) return;
+  
+  const custId = parseInt(select.value);
+  const arData = globalARBalances.find(ar => ar.id === custId);
+  const balance = arData ? arData.ar_balance : 0;
+  
+  balanceEl.textContent = fmtCurrency(balance);
+  balanceEl.style.color = balance > 0 ? '#ef4444' : '#10b981';
+  balanceEl.dataset.balance = balance;
+  
+  // 수금액을 미수 잔액으로 자동 설정
+  amountInput.value = Math.max(balance, 1);
 }
 
 function closeModal(modalId) {
@@ -452,6 +477,15 @@ async function submitCollection() {
   if (!date || !custId || !amount) {
     alert("수금 날짜, 거래처, 수금 금액을 입력해주세요.");
     return;
+  }
+
+  const balanceEl = document.getElementById('collection-current-balance');
+  const currentBalance = balanceEl ? parseInt(balanceEl.dataset.balance || 0) : 0;
+  
+  if (amount > currentBalance) {
+    if (!confirm(`현재 미수 잔액은 ${fmtCurrency(currentBalance)}입니다.\n입력하신 수금액 ${fmtCurrency(amount)}이(가) 잔액을 초과합니다.\n\n그래도 저장하시겠습니까?`)) {
+      return;
+    }
   }
 
   try {

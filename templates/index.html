@@ -209,7 +209,12 @@
       </div>
       <div class="form-group">
         <label class="form-label">거래처</label>
-        <select class="form-control" id="collection-customer"></select>
+        <select class="form-control" id="collection-customer" onchange="onCollectionCustomerChange()"></select>
+      </div>
+      <!-- 현재 미수 잔액 표시 (추가됨) -->
+      <div style="background:#fefce8; border:1px solid #fde047; border-radius:8px; padding:10px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#92400e; font-size:0.9rem; font-weight:bold;">현재 미수 잔액</span>
+        <span id="collection-current-balance" style="color:#d97706; font-size:1.1rem; font-weight:bold;">0원</span>
       </div>
       <div class="form-group">
         <label class="form-label">수금 금액 (원)</label>
