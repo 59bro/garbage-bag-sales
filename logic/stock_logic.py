@@ -119,7 +119,7 @@ class StockLogic:
                    ON it.spec_id = ps.id 
                   AND it.transaction_type != '초기재고'
                   AND (init.transaction_date IS NULL OR it.transaction_date >= init.transaction_date)
-            WHERE ps.is_active = 1
+            WHERE ps.is_active = 1 AND pt.name != '아파트 필증'
             GROUP BY pt.id, ps.id, pt.name, ps.spec_name, ps.unit_price, init.quantity
             ORDER BY pt.id, LENGTH(ps.spec_name), ps.spec_name
             """
