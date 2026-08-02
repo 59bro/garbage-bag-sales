@@ -365,18 +365,15 @@ async function searchSalesHistory() {
   try {
     const res = await fetch(url).then(r => r.json());
     if (res.status === 'success') {
-      // 요약 표시
-      const summaryEl = document.getElementById('search-summary');
-      if (summaryEl) {
-        const totalQty = res.sales.reduce((s, r) => s + (r.quantity || 0), 0);
-        const totalAmt = res.sales.reduce((s, r) => s + (r.total_amount || 0), 0);
-        document.getElementById('search-count').textContent = res.sales.length;
-        document.getElementById('search-qty').textContent = totalQty.toLocaleString();
-        document.getElementById('search-total').textContent = fmtCurrency(totalAmt);
-        summaryEl.style.display = 'block';
-      }
-
       if (res.sales.length === 0) {
+        // 요약 표시 0으로
+        const summaryEl = document.getElementById('search-summary');
+        if (summaryEl) {
+          document.getElementById('search-count').textContent = 0;
+          document.getElementById('search-qty').textContent = 0;
+          document.getElementById('search-total').textContent = '0원';
+          summaryEl.style.display = 'block';
+        }
         listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">해당 기간에 판매 내역이 없습니다.</div></div>';
         return;
       }
@@ -395,6 +392,17 @@ async function searchSalesHistory() {
         grouped[key].total_amount += s.total_amount;
         grouped[key].item_count += 1;
       });
+
+      // 요약 표시
+      const summaryEl = document.getElementById('search-summary');
+      if (summaryEl) {
+        const totalQty = res.sales.reduce((s, r) => s + (r.quantity || 0), 0);
+        const totalAmt = res.sales.reduce((s, r) => s + (r.total_amount || 0), 0);
+        document.getElementById('search-count').textContent = Object.keys(grouped).length;
+        document.getElementById('search-qty').textContent = totalQty.toLocaleString();
+        document.getElementById('search-total').textContent = fmtCurrency(totalAmt);
+        summaryEl.style.display = 'block';
+      }
 
       listEl.innerHTML = Object.values(grouped).map(g => `
         <div class="list-item">
