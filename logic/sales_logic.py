@@ -15,9 +15,40 @@ class SalesLogic:
                  quantity: int, unit_price: int, payment_method: str,
                  memo: str = '', cash_amount: int = 0, card_amount: int = 0) -> int:
         """판매 등록 + 재고 출고 자동 반영."""
+        # [아파트 필증] 특별 처리 로직 추가
+        spec_info = self.db.fetchone("""
+            SELECT ps.spec_name, pt.name AS type_name 
+            FROM product_specs ps
+            JOIN product_types pt ON ps.type_id = pt.id
+            WHERE ps.id = ?
+        """, (spec_id,))
+
+        if spec_info and spec_info['type_name'].strip() == '아파트 필증':
+            # "아파트 필증"인 경우: 판매 테이블에는 기록하지 않고 "가정용 필증" 재고에서 차감
+            home_spec = self.db.fetchone("""
+                SELECT ps.id 
+                FROM product_specs ps
+                JOIN product_types pt ON ps.type_id = pt.id
+                WHERE pt.name = '가정용 필증' AND ps.spec_name = ?
+            """, (spec_info['spec_name'],))
+            
+            target_spec_id = home_spec['id'] if home_spec else spec_id
+            memo_str = f"아파트 필증({spec_info['spec_name']}) 배부 차감" + (f" - {memo}" if memo else "")
+            
+            # 재고 출고만 기록 (판매 기록 안 함)
+            self.db.execute(
+                """
+                INSERT INTO inventory_transactions
+                    (spec_id, transaction_date, transaction_type, quantity, memo)
+                VALUES (?, ?, '출고', ?, ?)
+                """,
+                (target_spec_id, sale_date, quantity, memo_str)
+            )
+            return -1  # 판매 기록이 없음을 의미
+
         total = quantity * unit_price
 
-        # 판매 내역 저장
+        # 일반 판매 내역 저장
         sale_id = self.db.execute(
             """
             INSERT INTO sales
@@ -29,7 +60,7 @@ class SalesLogic:
              total, payment_method, cash_amount, card_amount, memo)
         )
 
-        # 재고 출고 자동 기록
+        # 일반 재고 출고 자동 기록
         self.db.execute(
             """
             INSERT INTO inventory_transactions
