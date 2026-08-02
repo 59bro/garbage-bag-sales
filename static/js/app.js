@@ -309,15 +309,33 @@ async function loadSalesList() {
         listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">오늘 등록된 판매 내역이 없습니다.</div></div>';
         return;
       }
-      listEl.innerHTML = res.sales.map(s => `
+      
+      const grouped = {};
+      res.sales.forEach(s => {
+        const key = s.customer_id;
+        if (!grouped[key]) {
+          grouped[key] = {
+            customer_name: s.customer_name,
+            payment_method: s.payment_method,
+            total_amount: 0,
+            item_count: 0,
+            ids: []
+          };
+        }
+        grouped[key].total_amount += s.total_amount;
+        grouped[key].item_count += 1;
+        grouped[key].ids.push(s.id);
+      });
+
+      listEl.innerHTML = Object.values(grouped).map(g => `
         <div class="list-item">
           <div>
-            <div class="list-item-title">${s.customer_name} <span class="badge badge-blue">${s.payment_method}</span></div>
-            <div class="list-item-sub">[${s.type_name}] ${s.spec_name} · ${fmtQty(s.quantity)}</div>
+            <div class="list-item-title">${g.customer_name}</div>
+            <div class="list-item-sub">총 ${g.item_count}개 품목</div>
           </div>
-          <div>
-            <div class="list-item-val">${fmtCurrency(s.total_amount)}</div>
-            <button class="btn btn-danger btn-sm" onclick="deleteSale(${s.id})" style="margin-top:4px;">삭제</button>
+          <div style="text-align:right;">
+            <div class="list-item-val"><b>${fmtCurrency(g.total_amount)}</b></div>
+            <button class="btn btn-danger btn-sm" onclick='deleteSalesGroup(${JSON.stringify(g.ids)})' style="margin-top:4px;">전체 삭제</button>
           </div>
         </div>
       `).join('');
@@ -362,14 +380,30 @@ async function searchSalesHistory() {
         listEl.innerHTML = '<div class="list-item"><div class="list-item-sub">해당 기간에 판매 내역이 없습니다.</div></div>';
         return;
       }
-      listEl.innerHTML = res.sales.map(s => `
+
+      const grouped = {};
+      res.sales.forEach(s => {
+        const key = s.sale_date + '_' + s.customer_id;
+        if (!grouped[key]) {
+          grouped[key] = {
+            sale_date: s.sale_date,
+            customer_name: s.customer_name,
+            total_amount: 0,
+            item_count: 0
+          };
+        }
+        grouped[key].total_amount += s.total_amount;
+        grouped[key].item_count += 1;
+      });
+
+      listEl.innerHTML = Object.values(grouped).map(g => `
         <div class="list-item">
           <div>
-            <div class="list-item-title">${s.customer_name} <span class="badge badge-blue">${s.payment_method}</span></div>
-            <div class="list-item-sub">${s.sale_date} · [${s.type_name}] ${s.spec_name} · ${fmtQty(s.quantity)}</div>
+            <div class="list-item-title">${g.customer_name}</div>
+            <div class="list-item-sub">${g.sale_date} · 총 ${g.item_count}개 품목</div>
           </div>
-          <div>
-            <div class="list-item-val">${fmtCurrency(s.total_amount)}</div>
+          <div style="text-align:right;">
+            <div class="list-item-val"><b>${fmtCurrency(g.total_amount)}</b></div>
           </div>
         </div>
       `).join('');
@@ -380,16 +414,17 @@ async function searchSalesHistory() {
   }
 }
 
-async function deleteSale(saleId) {
-  if (!confirm("이 판매 내역을 삭제하시겠습니까? (재고/미수금이 자동 원복됩니다)")) return;
+async function deleteSalesGroup(ids) {
+  if (!confirm("해당 거래처의 이 판매 내역을 모두 삭제하시겠습니까? (재고/미수금이 자동 원복됩니다)")) return;
   try {
-    const res = await fetch(`/api/sales/${saleId}`, { method: 'DELETE' }).then(r => r.json());
-    if (res.status === 'success') {
-      loadSalesList();
-      loadDashboard();
+    for (const id of ids) {
+      await fetch(`/api/sales/${id}`, { method: 'DELETE' });
     }
+    alert("✅ 삭제되었습니다.");
+    loadSalesList();
+    loadDashboard();
   } catch (err) {
-    alert("삭제 실패: " + err);
+    alert("삭제 중 오류가 발생했습니다: " + err);
   }
 }
 
