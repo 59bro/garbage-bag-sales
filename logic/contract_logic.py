@@ -25,6 +25,26 @@ class ContractLogic:
         """계약 삭제"""
         self.db.execute("DELETE FROM supplier_contracts WHERE id=?", (contract_id,))
 
+    def delete_contract_by_supplier_spec(self, supplier_id: int, spec_id: int):
+        """특정 입고처 및 규격의 모든 계약 삭제"""
+        self.db.execute(
+            "DELETE FROM supplier_contracts WHERE supplier_id=? AND spec_id=?",
+            (supplier_id, spec_id)
+        )
+
+    def update_contract(self, supplier_id: int, spec_id: int, contract_quantity: int,
+                        old_supplier_id: int = None, old_spec_id: int = None):
+        """
+        계약 수량 및 입고처/규격 수정.
+        old_supplier_id / old_spec_id가 지정되면 기존 레코드를 삭제 후 새 계약 정보로 재등록합니다.
+        """
+        orig_sup  = old_supplier_id if old_supplier_id is not None else supplier_id
+        orig_spec = old_spec_id if old_spec_id is not None else spec_id
+
+        # 기존 계약 내역 삭제 후 1건으로 갱신
+        self.delete_contract_by_supplier_spec(orig_sup, orig_spec)
+        self.add_contract(supplier_id, spec_id, contract_quantity)
+
     def get_remaining_contracts(self, supplier_id: int = None) -> list:
         """
         입고처별/규격별 총 계약수량, 총 입고(납품)수량, 잔여수량 조회

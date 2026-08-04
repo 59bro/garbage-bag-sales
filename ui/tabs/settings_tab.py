@@ -349,6 +349,18 @@ class SettingsTab(QWidget):
         btn_add.clicked.connect(self._add_contract)
         top.addWidget(btn_add)
 
+        btn_edit = QPushButton("✏️  수정")
+        btn_edit.setObjectName("btn_ghost")
+        btn_edit.setFixedHeight(38)
+        btn_edit.clicked.connect(self._edit_contract)
+        top.addWidget(btn_edit)
+
+        btn_del = QPushButton("🗑️  삭제")
+        btn_del.setObjectName("btn_danger")
+        btn_del.setFixedHeight(38)
+        btn_del.clicked.connect(self._delete_contract)
+        top.addWidget(btn_del)
+
         btn_export = QPushButton("엑셀 출력")
         btn_export.setObjectName("btn_ghost")
         btn_export.setFixedHeight(38)
@@ -387,6 +399,7 @@ class SettingsTab(QWidget):
     def _load_contracts(self):
         sup_id = self.combo_contract_sup.currentData() if hasattr(self, 'combo_contract_sup') else None
         rows = self.contract_logic.get_remaining_contracts(supplier_id=sup_id)
+        self._contract_rows = rows
         
         self.tbl_contract.setRowCount(len(rows))
         for r, row in enumerate(rows):
@@ -411,11 +424,47 @@ class SettingsTab(QWidget):
                         item.setForeground(QColor('#0284c7'))  # 잔여
                 self.tbl_contract.setItem(r, c, item)
 
+    def _sel_contract_row(self):
+        r = self.tbl_contract.currentRow()
+        if r < 0 or r >= len(self._contract_rows):
+            return None
+        return self._contract_rows[r]
+
     def _add_contract(self):
         from ui.dialogs.contract_dialog import ContractDialog
         dlg = ContractDialog(self)
         if dlg.exec_():
             self._load_contracts()
+
+    def _edit_contract(self):
+        row = self._sel_contract_row()
+        if not row:
+            QMessageBox.information(self, "알림", "수정할 계약 항목을 리스트에서 선택해 주세요.")
+            return
+        from ui.dialogs.contract_dialog import ContractDialog
+        dlg = ContractDialog(
+            self,
+            supplier_id=row['supplier_id'],
+            spec_id=row['spec_id'],
+            current_qty=row['total_contract_quantity']
+        )
+        if dlg.exec_():
+            self._load_contracts()
+
+    def _delete_contract(self):
+        row = self._sel_contract_row()
+        if not row:
+            QMessageBox.information(self, "알림", "삭제할 계약 항목을 리스트에서 선택해 주세요.")
+            return
+        
+        msg = f"[{row['supplier_name']}] 거래처의 '{row['type_name']} - {row['spec_name']}' 계약 항목(계약수량: {row['total_contract_quantity']:,}개)을 정말로 삭제하시겠습니까?"
+        if QMessageBox.question(self, "계약 삭제 확인", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
+            try:
+                self.contract_logic.delete_contract_by_supplier_spec(row['supplier_id'], row['spec_id'])
+                self._load_contracts()
+                QMessageBox.information(self, "삭제 완료", "계약 항목이 삭제되었습니다.")
+            except Exception as e:
+                QMessageBox.critical(self, "오류", f"삭제 실패: {e}")
 
 
     def _load_specs(self):

@@ -12,9 +12,14 @@ from logic.product_logic import ProductLogic
 from logic.contract_logic import ContractLogic
 
 class ContractDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, supplier_id: int = None, spec_id: int = None, current_qty: int = 0):
         super().__init__(parent)
-        self.setWindowTitle("입고처 계약 수량 등록")
+        self.supplier_id = supplier_id
+        self.spec_id = spec_id
+        self.current_qty = current_qty
+
+        title = "입고처 계약 수량 수정" if supplier_id and spec_id else "입고처 계약 수량 등록"
+        self.setWindowTitle(title)
         self.setFixedSize(400, 250)
         
         self.customer_logic = CustomerLogic()
@@ -22,6 +27,8 @@ class ContractDialog(QDialog):
         self.contract_logic = ContractLogic()
 
         self._build_ui()
+        if supplier_id and spec_id:
+            self._load_edit_data()
 
     def _build_ui(self):
         v = QVBoxLayout(self)
@@ -64,7 +71,8 @@ class ContractDialog(QDialog):
         v.addStretch()
 
         btn_h = QHBoxLayout()
-        btn_save = QPushButton("등록")
+        btn_text = "수정" if self.supplier_id and self.spec_id else "등록"
+        btn_save = QPushButton(btn_text)
         btn_save.setObjectName("btn_primary")
         btn_save.setFixedHeight(40)
         btn_save.clicked.connect(self._save)
@@ -77,6 +85,17 @@ class ContractDialog(QDialog):
         btn_h.addWidget(btn_cancel)
         btn_h.addWidget(btn_save)
         v.addLayout(btn_h)
+
+    def _load_edit_data(self):
+        idx_sup = self.combo_supplier.findData(self.supplier_id)
+        if idx_sup >= 0:
+            self.combo_supplier.setCurrentIndex(idx_sup)
+
+        idx_spec = self.combo_spec.findData(self.spec_id)
+        if idx_spec >= 0:
+            self.combo_spec.setCurrentIndex(idx_spec)
+
+        self.txt_qty.setText(str(self.current_qty))
 
     def _save(self):
         sup_id = self.combo_supplier.currentData()
@@ -99,7 +118,14 @@ class ContractDialog(QDialog):
             return
 
         try:
-            self.contract_logic.add_contract(sup_id, spec_id, qty)
+            if self.supplier_id and self.spec_id:
+                self.contract_logic.update_contract(
+                    sup_id, spec_id, qty,
+                    old_supplier_id=self.supplier_id,
+                    old_spec_id=self.spec_id
+                )
+            else:
+                self.contract_logic.add_contract(sup_id, spec_id, qty)
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "오류", f"저장 중 오류가 발생했습니다:\n{str(e)}")
