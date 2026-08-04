@@ -185,10 +185,15 @@ class SettingsTab(QWidget):
             return None
         return self._cust_ids[self.tbl_cust.currentRow()]
 
+    def _on_customers_changed(self):
+        self._load_customers()
+        if hasattr(self, 'combo_contract_sup'):
+            self._reload_contract_combo()
+            self._load_contracts()
+
     def _add_customer(self):
         if CustomerDialog(self).exec_():
-            self._load_customers()
-            self._notify()
+            self._on_customers_changed()
 
     def _edit_customer(self):
         cid = self._sel_cust_id()
@@ -196,8 +201,7 @@ class SettingsTab(QWidget):
             QMessageBox.information(self, "알림", "수정할 거래처를 선택해주세요.")
             return
         if CustomerDialog(self, customer_id=cid).exec_():
-            self._load_customers()
-            self._notify()
+            self._on_customers_changed()
 
     def _deactivate_customer(self):
         cid = self._sel_cust_id()
@@ -207,8 +211,7 @@ class SettingsTab(QWidget):
         if QMessageBox.question(self, "확인", "선택한 거래처를 비활성화 하시겠습니까?",
             QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
             self.customer_logic.deactivate(cid)
-            self._load_customers()
-            self._notify()
+            self._on_customers_changed()
 
     def _delete_customer(self):
         cid = self._sel_cust_id()
@@ -233,8 +236,7 @@ class SettingsTab(QWidget):
             )
             if reply == QMessageBox.Yes:
                 self.customer_logic.deactivate(cid)
-                self._load_customers()
-                self._notify()
+                self._on_customers_changed()
             return
 
         if QMessageBox.question(
@@ -244,8 +246,7 @@ class SettingsTab(QWidget):
         ) == QMessageBox.Yes:
             try:
                 self.customer_logic.delete(cid)
-                self._load_customers()
-                self._notify()
+                self._on_customers_changed()
                 QMessageBox.information(self, "성공", f"'{cust_name}' 거래처가 삭제되었습니다.")
             except Exception as e:
                 QMessageBox.critical(self, "오류", f"거래처 삭제 실패: {e}")

@@ -47,42 +47,43 @@ class ContractLogic:
 
     def get_remaining_contracts(self, supplier_id: int = None) -> list:
         """
-        입고처별/규격별 총 계약수량, 총 입고(납품)수량, 잔여수량 조회
+        입고처별/규격별 총 계약수량, 총 입고(납품)수량, 잔여수량 조회.
+        계약 내역이 없더라도 등록된 모든 활성 입고처(customer_type='입고처') 목록을 포함하여 반환합니다.
         """
         where_clause = ""
         params = []
         if supplier_id:
-            where_clause = "WHERE sc.supplier_id = ?"
+            where_clause = "AND c.id = ?"
             params.append(supplier_id)
 
         sql = f"""
             SELECT 
-                sc.supplier_id,
+                c.id AS supplier_id,
                 c.name AS supplier_name,
-                pt.name AS type_name,
-                ps.spec_name,
+                COALESCE(pt.name, '-') AS type_name,
+                COALESCE(ps.spec_name, '-') AS spec_name,
                 sc.spec_id,
-                SUM(sc.contract_quantity) AS total_contract_quantity,
+                COALESCE(SUM(sc.contract_quantity), 0) AS total_contract_quantity,
                 COALESCE((
                     SELECT SUM(it.quantity)
                     FROM inventory_transactions it
-                    WHERE it.reference_id = sc.supplier_id 
-                      AND it.spec_id = sc.spec_id 
+                    WHERE it.reference_id = c.id 
+                      AND (sc.spec_id IS NULL OR it.spec_id = sc.spec_id)
                       AND it.transaction_type = '입고'
                 ), 0) AS total_delivered_quantity,
-                (SUM(sc.contract_quantity) - COALESCE((
+                (COALESCE(SUM(sc.contract_quantity), 0) - COALESCE((
                     SELECT SUM(it.quantity)
                     FROM inventory_transactions it
-                    WHERE it.reference_id = sc.supplier_id 
-                      AND it.spec_id = sc.spec_id 
+                    WHERE it.reference_id = c.id 
+                      AND (sc.spec_id IS NULL OR it.spec_id = sc.spec_id)
                       AND it.transaction_type = '입고'
                 ), 0)) AS remaining_quantity
-            FROM supplier_contracts sc
-            JOIN customers c ON sc.supplier_id = c.id
-            JOIN product_specs ps ON sc.spec_id = ps.id
-            JOIN product_types pt ON ps.type_id = pt.id
-            {where_clause}
-            GROUP BY sc.supplier_id, sc.spec_id, c.name, pt.name, ps.spec_name
+            FROM customers c
+            LEFT JOIN supplier_contracts sc ON sc.supplier_id = c.id
+            LEFT JOIN product_specs ps ON sc.spec_id = ps.id
+            LEFT JOIN product_types pt ON ps.type_id = pt.id
+            WHERE c.customer_type = '입고처' AND c.is_active = 1 {where_clause}
+            GROUP BY c.id, c.name, sc.spec_id, pt.name, ps.spec_name
             ORDER BY c.name, pt.name, ps.spec_name
         """
         return self.db.fetchall(sql, tuple(params))
