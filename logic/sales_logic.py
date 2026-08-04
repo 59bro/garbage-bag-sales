@@ -10,29 +10,44 @@ class SalesLogic:
     def __init__(self):
         self.db = DBManager()
 
+    def _get_spec_info(self, spec_id: int):
+        if not hasattr(self, '_spec_cache'):
+            self._spec_cache = {}
+        if spec_id not in self._spec_cache:
+            row = self.db.fetchone("""
+                SELECT ps.spec_name, pt.name AS type_name 
+                FROM product_specs ps
+                JOIN product_types pt ON ps.type_id = pt.id
+                WHERE ps.id = ?
+            """, (spec_id,))
+            self._spec_cache[spec_id] = row
+        return self._spec_cache[spec_id]
+
+    def _get_home_spec_id(self, spec_name: str):
+        if not hasattr(self, '_home_spec_cache'):
+            self._home_spec_cache = {}
+        if spec_name not in self._home_spec_cache:
+            row = self.db.fetchone("""
+                SELECT ps.id 
+                FROM product_specs ps
+                JOIN product_types pt ON ps.type_id = pt.id
+                WHERE pt.name = '가정용 필증' AND ps.spec_name = ?
+            """, (spec_name,))
+            self._home_spec_cache[spec_name] = row['id'] if row else None
+        return self._home_spec_cache[spec_name]
+
     # ── 판매 등록 ────────────────────────────────────────────
     def add_sale(self, sale_date: str, customer_id: int, spec_id: int,
                  quantity: int, unit_price: int, payment_method: str,
                  memo: str = '', cash_amount: int = 0, card_amount: int = 0) -> int:
         """판매 등록 + 재고 출고 자동 반영."""
-        # [아파트 필증] 특별 처리 로직 추가
-        spec_info = self.db.fetchone("""
-            SELECT ps.spec_name, pt.name AS type_name 
-            FROM product_specs ps
-            JOIN product_types pt ON ps.type_id = pt.id
-            WHERE ps.id = ?
-        """, (spec_id,))
+        # [아파트 필증] 특별 처리 로직 (캐시 사용)
+        spec_info = self._get_spec_info(spec_id)
 
         if spec_info and spec_info['type_name'].strip() == '아파트 필증':
             # "아파트 필증"인 경우: 판매 테이블에는 기록하지 않고 "가정용 필증" 재고에서 차감
-            home_spec = self.db.fetchone("""
-                SELECT ps.id 
-                FROM product_specs ps
-                JOIN product_types pt ON ps.type_id = pt.id
-                WHERE pt.name = '가정용 필증' AND ps.spec_name = ?
-            """, (spec_info['spec_name'],))
-            
-            target_spec_id = home_spec['id'] if home_spec else spec_id
+            home_spec_id = self._get_home_spec_id(spec_info['spec_name'])
+            target_spec_id = home_spec_id if home_spec_id else spec_id
             memo_str = f"아파트 필증({spec_info['spec_name']}) 배부 차감" + (f" - {memo}" if memo else "")
             
             # 재고 출고만 기록 (판매 기록 안 함)

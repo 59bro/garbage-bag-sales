@@ -231,8 +231,12 @@ class SalesTab(QWidget):
         self.tbl_bill.setRowCount(len(specs))
         self.spin_boxes = []
 
+        # ── 성능 최적화: 23번의 DB 개별 조회 대신 1번의 쿼리로 전체 재고 맵 구성 ──
+        all_stocks = self.stock_logic.get_all_current_stocks()
+        stock_map = {s['spec_id']: s['current_stock'] for s in all_stocks}
+
         for r, sp in enumerate(specs):
-            stock = self.stock_logic.get_current_stock(sp['id'])
+            stock = stock_map.get(sp['id'], 0)
             
             # 0: 종류, 1: 규격, 2: 단가, 3: 재고
             tname = sp['type_name']
