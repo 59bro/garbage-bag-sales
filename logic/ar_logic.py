@@ -10,9 +10,11 @@ class ARLogic:
         self.db = DBManager()
 
     # ── 미수 잔액 ────────────────────────────────────────────
-    def get_outstanding_summary(self) -> list:
+    def get_outstanding_summary(self, include_zero: bool = False) -> list:
         """거래처별 미수 잔액 집계 (초기 미수 + 판매 미수 - 수금액)."""
-        return self.db.fetchall("""
+        where_cond = "AND (COALESCE(c.initial_ar, 0) + COALESCE(s.sales_credit, 0) - COALESCE(col.total_collected, 0)) != 0" if not include_zero else "AND (COALESCE(c.initial_ar, 0) != 0 OR COALESCE(s.sales_credit, 0) > 0 OR COALESCE(col.total_collected, 0) > 0)"
+
+        return self.db.fetchall(f"""
             SELECT
                 c.id AS customer_id,
                 c.name AS customer_name,
@@ -34,7 +36,7 @@ class ARLogic:
                 GROUP BY customer_id
             ) col ON c.id = col.customer_id
             WHERE c.is_active = 1
-              AND (COALESCE(c.initial_ar, 0) != 0 OR COALESCE(s.sales_credit, 0) > 0 OR COALESCE(col.total_collected, 0) > 0)
+              {where_cond}
             ORDER BY outstanding DESC, c.name
         """)
 

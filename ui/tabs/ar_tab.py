@@ -4,7 +4,7 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QDateEdit, QPushButton,
+    QLabel, QComboBox, QDateEdit, QPushButton, QCheckBox,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QMessageBox, QTabWidget, QFrame, QFileDialog
 )
@@ -69,6 +69,10 @@ class ARTab(QWidget):
             self.combo_dist_filter.addItem(d, d)
         self.combo_dist_filter.currentIndexChanged.connect(self._load_outstanding)
         fh.addWidget(self.combo_dist_filter)
+
+        self.chk_include_zero = QCheckBox("완납(0원) 포함")
+        self.chk_include_zero.stateChanged.connect(self._load_outstanding)
+        fh.addWidget(self.chk_include_zero)
 
         btn_ref = QPushButton("새로고침")
         btn_ref.setObjectName("btn_ghost")
@@ -146,7 +150,8 @@ class ARTab(QWidget):
 
     def _load_outstanding(self):
         dist = self.combo_dist_filter.currentData()
-        rows = self.ar_logic.get_outstanding_summary()
+        inc_zero = self.chk_include_zero.isChecked() if hasattr(self, 'chk_include_zero') else False
+        rows = self.ar_logic.get_outstanding_summary(include_zero=inc_zero)
         if dist:
             rows = [r for r in rows if r.get('district') == dist]
 
