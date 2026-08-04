@@ -63,22 +63,29 @@ class CustomerLogic:
         self.db.execute("UPDATE customers SET is_active=1 WHERE id=?", (cid,))
 
     def has_references(self, cid: int) -> dict:
-        sales_cnt = self.db.fetchone("SELECT COUNT(*) as cnt FROM sales WHERE customer_id=?", (cid,))['cnt']
-        ar_cnt = self.db.fetchone("SELECT COUNT(*) as cnt FROM ar_collections WHERE customer_id=?", (cid,))['cnt']
-        contract_cnt = self.db.fetchone("SELECT COUNT(*) as cnt FROM supplier_contracts WHERE supplier_id=?", (cid,))['cnt']
-        total = sales_cnt + ar_cnt + contract_cnt
+        row = self.db.fetchone("""
+            SELECT 
+                (SELECT COUNT(*) FROM sales WHERE customer_id=?) AS sales_cnt,
+                (SELECT COUNT(*) FROM ar_collections WHERE customer_id=?) AS ar_cnt,
+                (SELECT COUNT(*) FROM supplier_contracts WHERE supplier_id=?) AS contract_cnt
+        """, (cid, cid, cid))
+        s = row['sales_cnt'] if row else 0
+        a = row['ar_cnt'] if row else 0
+        c = row['contract_cnt'] if row else 0
+        total = s + a + c
         return {
             'has_ref': total > 0,
-            'sales_cnt': sales_cnt,
-            'ar_cnt': ar_cnt,
-            'contract_cnt': contract_cnt,
+            'sales_cnt': s,
+            'ar_cnt': a,
+            'contract_cnt': c,
             'total_cnt': total
         }
 
-    def delete(self, cid: int):
-        ref = self.has_references(cid)
-        if ref['has_ref']:
-            raise ValueError("기존 거래/수금/계약 내역이 존재하는 거래처는 완전 삭제할 수 없습니다. 대신 비활성화 기능을 이용하세요.")
+    def delete(self, cid: int, check_ref: bool = True):
+        if check_ref:
+            ref = self.has_references(cid)
+            if ref['has_ref']:
+                raise ValueError("기존 거래/수금/계약 내역이 존재하는 거래처는 완전 삭제할 수 없습니다. 대신 비활성화 기능을 이용하세요.")
         self.db.execute("DELETE FROM customers WHERE id=?", (cid,))
 
     def get_names_dict(self) -> dict:

@@ -152,28 +152,32 @@ class SettingsTab(QWidget):
             include_inactive=True, district=district or None
         )
         self._cust_ids = []
-        self.tbl_cust.setRowCount(len(rows))
-        for r, row in enumerate(rows):
-            self._cust_ids.append(row['id'])
-            active = row['is_active']
-            dist   = row.get('district', '') or ''
-            ctype  = row.get('customer_type', '출고처')
-            # 구분 열 추가
-            vals = [str(row['id']), ctype, row['name'], dist,
-                    row.get('phone', ''), row.get('address', ''),
-                    "활성" if active else "비활성"]
-            for c, val in enumerate(vals):
-                item = QTableWidgetItem(str(val))
-                item.setTextAlignment(Qt.AlignCenter)
-                if not active:
-                    item.setForeground(QColor('#334155'))
-                if c == 1: # 구분 (출고처/입고처)
-                    item.setForeground(QColor('#0284c7' if ctype == '입고처' else '#ea580c'))
-                if c == 3 and dist: # 지역 컬럼 색상
-                    item.setForeground(QColor('#818cf8'))
-                if c == 6 and active:
-                    item.setForeground(QColor('#10b981'))
-                self.tbl_cust.setItem(r, c, item)
+        self.tbl_cust.setUpdatesEnabled(False)
+        try:
+            self.tbl_cust.setRowCount(len(rows))
+            for r, row in enumerate(rows):
+                self._cust_ids.append(row['id'])
+                active = row['is_active']
+                dist   = row.get('district', '') or ''
+                ctype  = row.get('customer_type', '출고처')
+                # 구분 열 추가
+                vals = [str(row['id']), ctype, row['name'], dist,
+                        row.get('phone', ''), row.get('address', ''),
+                        "활성" if active else "비활성"]
+                for c, val in enumerate(vals):
+                    item = QTableWidgetItem(str(val))
+                    item.setTextAlignment(Qt.AlignCenter)
+                    if not active:
+                        item.setForeground(QColor('#334155'))
+                    if c == 1: # 구분 (출고처/입고처)
+                        item.setForeground(QColor('#0284c7' if ctype == '입고처' else '#ea580c'))
+                    if c == 3 and dist: # 지역 컬럼 색상
+                        item.setForeground(QColor('#818cf8'))
+                    if c == 6 and active:
+                        item.setForeground(QColor('#10b981'))
+                    self.tbl_cust.setItem(r, c, item)
+        finally:
+            self.tbl_cust.setUpdatesEnabled(True)
 
     def _sel_cust_id(self):
         items = self.tbl_cust.selectedItems()
