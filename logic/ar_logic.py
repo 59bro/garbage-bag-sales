@@ -10,76 +10,150 @@ class ARLogic:
         self.db = DBManager()
 
     # ── 미수 잔액 ────────────────────────────────────────────
-    def get_outstanding_summary(self, include_zero: bool = False) -> list:
-        """거래처별 미수 잔액 집계 (초기 미수 + 판매 미수 - 수금액)."""
-        where_cond = "AND (COALESCE(c.initial_ar, 0) + COALESCE(s.sales_credit, 0) - COALESCE(col.total_collected, 0)) != 0" if not include_zero else "AND (COALESCE(c.initial_ar, 0) != 0 OR COALESCE(s.sales_credit, 0) > 0 OR COALESCE(col.total_collected, 0) > 0)"
+    def _get_last_reset_info(self, customer_id: int):
+        """
+        특정 거래처의 미수 잔액 흐름을 추적하여, 
+        잔액이 0원(완납) 이하가 된 마지막 리셋 포인트 이후의 활성 미수/수금 내역을 반환.
+        """
+        cust = self.db.fetchone("SELECT id, name, district, COALESCE(initial_ar, 0) AS initial_ar FROM customers WHERE id=?", (customer_id,))
+        if not cust:
+            return None
 
-        return self.db.fetchall(f"""
-            SELECT
-                c.id AS customer_id,
-                c.name AS customer_name,
-                c.district,
-                COALESCE(c.initial_ar, 0) AS initial_ar,
-                COALESCE(s.sales_credit, 0) AS sales_credit,
-                COALESCE(c.initial_ar, 0) + COALESCE(s.sales_credit, 0) AS total_credit,
-                COALESCE(col.total_collected, 0) AS total_collected,
-                COALESCE(c.initial_ar, 0) + COALESCE(s.sales_credit, 0) - COALESCE(col.total_collected, 0) AS outstanding
-            FROM customers c
-            LEFT JOIN (
-                SELECT customer_id, SUM(total_amount) AS sales_credit
-                FROM sales WHERE payment_method = '미수'
-                GROUP BY customer_id
-            ) s ON c.id = s.customer_id
-            LEFT JOIN (
-                SELECT customer_id, SUM(amount) AS total_collected
-                FROM ar_collections
-                GROUP BY customer_id
-            ) col ON c.id = col.customer_id
-            WHERE c.is_active = 1
-              {where_cond}
-            ORDER BY outstanding DESC, c.name
-        """)
+        init_ar = cust['initial_ar']
+        c_sales = self.db.fetchall("SELECT id, sale_date, total_amount FROM sales WHERE customer_id=? AND payment_method='미수' ORDER BY sale_date, id", (customer_id,))
+        c_cols  = self.db.fetchall("SELECT id, collection_date, amount FROM ar_collections WHERE customer_id=? ORDER BY collection_date, id", (customer_id,))
+
+        events = []
+        if init_ar != 0:
+            events.append({'type': 'init', 'date': '0000-00-00', 'id': 0, 'amount': init_ar, 'ref_id': 0})
+        for s in c_sales:
+            events.append({'type': 'sale', 'date': s['sale_date'], 'id': s['id'], 'amount': s['total_amount'], 'ref_id': s['id']})
+        for col in c_cols:
+            events.append({'type': 'col', 'date': col['collection_date'], 'id': col['id'], 'amount': -col['amount'], 'ref_id': col['id']})
+
+        # 수금(col)이 신규 판매(sale)보다 동일 날짜에 먼저 처리되도록 정렬
+        events.sort(key=lambda x: (x['date'], 0 if x['type']=='init' else (1 if x['type']=='col' else 2), x['id']))
+
+        running = 0
+        last_reset_idx = -1
+        for idx, ev in enumerate(events):
+            running += ev['amount']
+            if running <= 0:
+                last_reset_idx = idx
+
+        start_idx = last_reset_idx + 1 if last_reset_idx >= 0 else 0
+        
+        active_events = events[start_idx:]
+        last_reset_date = events[last_reset_idx]['date'] if last_reset_idx >= 0 else None
+
+        active_init_ar = sum(ev['amount'] for ev in active_events if ev['type'] == 'init')
+        active_sales = sum(ev['amount'] for ev in active_events if ev['type'] == 'sale')
+        active_cols = sum(-ev['amount'] for ev in active_events if ev['type'] == 'col')
+        outstanding = active_init_ar + active_sales - active_cols
+
+        return {
+            'customer_id': customer_id,
+            'customer_name': cust['name'],
+            'district': cust['district'] or '',
+            'initial_ar': active_init_ar,
+            'sales_credit': active_sales,
+            'total_credit': active_init_ar + active_sales,
+            'total_collected': active_cols,
+            'outstanding': outstanding,
+            'last_reset_date': last_reset_date,
+            'active_sale_ids': [ev['ref_id'] for ev in active_events if ev['type'] == 'sale'],
+            'active_col_ids': [ev['ref_id'] for ev in active_events if ev['type'] == 'col']
+        }
+
+    def get_outstanding_summary(self, include_zero: bool = False) -> list:
+        """
+        거래처별 미수 잔액 집계.
+        이전 미수가 완납(0원)된 시점이 있으면, 그 이후에 새로 발생한 미수/수금 내역만 집계하여 
+        판매 미수액과 총 수금액에 이전 완납 내역이 누적되지 않도록 처리합니다.
+        """
+        customers = self.db.fetchall("SELECT id FROM customers WHERE is_active=1")
+        result = []
+        for c in customers:
+            info = self._get_last_reset_info(c['id'])
+            if not info:
+                continue
+
+            if not include_zero and info['outstanding'] == 0:
+                continue
+            if include_zero and info['outstanding'] == 0 and info['sales_credit'] == 0 and info['total_collected'] == 0 and info['initial_ar'] == 0:
+                continue
+
+            result.append(info)
+
+        result.sort(key=lambda x: (-x['outstanding'], x['customer_name']))
+        return result
 
     def get_outstanding_total(self) -> int:
-        row = self.db.fetchone("""
-            SELECT
-                COALESCE((SELECT SUM(initial_ar) FROM customers WHERE is_active=1), 0) +
-                COALESCE((SELECT SUM(total_amount) FROM sales WHERE payment_method = '미수'), 0) -
-                COALESCE((SELECT SUM(amount) FROM ar_collections), 0) AS total
-        """)
-        return int(row['total']) if row else 0
+        summary = self.get_outstanding_summary(include_zero=False)
+        return sum(s['outstanding'] for s in summary)
 
     def get_credit_sales_by_customer(self, customer_id: int,
                                       start_date: str = None,
-                                      end_date: str = None) -> list:
-        """특정 거래처의 미수 판매 내역."""
+                                      end_date: str = None,
+                                      only_active_cycle: bool = True) -> list:
+        """
+        특정 거래처의 미수 판매 내역.
+        only_active_cycle=True인 경우 이전 완납 포인트 이후의 활성 미수 판매건만 조회합니다.
+        """
+        info = self._get_last_reset_info(customer_id)
+        if not info:
+            return []
+
         clauses = ["s.customer_id = ?", "s.payment_method = '미수'"]
         params  = [customer_id]
+
+        if only_active_cycle and info['active_sale_ids']:
+            placeholders = ",".join(["?"] * len(info['active_sale_ids']))
+            clauses.append(f"s.id IN ({placeholders})")
+            params.extend(info['active_sale_ids'])
+        elif only_active_cycle and not info['active_sale_ids']:
+            return []
+
         if start_date:
             clauses.append("s.sale_date >= ?"); params.append(start_date)
         if end_date:
             clauses.append("s.sale_date <= ?");  params.append(end_date)
+
         return self.db.fetchall(f"""
             SELECT s.*, pt.name AS type_name, ps.spec_name
             FROM sales s
             JOIN product_specs ps ON s.spec_id  = ps.id
             JOIN product_types pt ON ps.type_id = pt.id
             WHERE {' AND '.join(clauses)}
-            ORDER BY s.sale_date DESC
+            ORDER BY s.sale_date DESC, s.id DESC
         """, tuple(params))
 
-    def get_credit_by_date_grouped(self, customer_id: int) -> list:
+    def get_credit_by_date_grouped(self, customer_id: int, only_active_cycle: bool = True) -> list:
         """거래처별 미수 판매를 날짜별로 그룹핑하여 반환."""
-        return self.db.fetchall("""
+        info = self._get_last_reset_info(customer_id)
+        if not info:
+            return []
+
+        clauses = ["s.customer_id = ?", "s.payment_method = '미수'"]
+        params  = [customer_id]
+
+        if only_active_cycle and info['active_sale_ids']:
+            placeholders = ",".join(["?"] * len(info['active_sale_ids']))
+            clauses.append(f"s.id IN ({placeholders})")
+            params.extend(info['active_sale_ids'])
+        elif only_active_cycle and not info['active_sale_ids']:
+            return []
+
+        return self.db.fetchall(f"""
             SELECT s.sale_date,
                    COUNT(*) AS item_count,
                    SUM(s.quantity) AS total_qty,
                    SUM(s.total_amount) AS total_amount
             FROM sales s
-            WHERE s.customer_id = ? AND s.payment_method = '미수'
+            WHERE {' AND '.join(clauses)}
             GROUP BY s.sale_date
             ORDER BY s.sale_date DESC
-        """, (customer_id,))
+        """, tuple(params))
 
     # ── 수금 ─────────────────────────────────────────────────
     def add_collection(self, collection_date: str, customer_id: int,
