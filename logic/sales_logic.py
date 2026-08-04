@@ -39,7 +39,8 @@ class SalesLogic:
     # ── 판매 등록 ────────────────────────────────────────────
     def add_sale(self, sale_date: str, customer_id: int, spec_id: int,
                  quantity: int, unit_price: int, payment_method: str,
-                 memo: str = '', cash_amount: int = 0, card_amount: int = 0) -> int:
+                 memo: str = '', cash_amount: int = 0, card_amount: int = 0,
+                 auto_commit: bool = True) -> int:
         """판매 등록 + 재고 출고 자동 반영."""
         # [아파트 필증] 특별 처리 로직 (캐시 사용)
         spec_info = self._get_spec_info(spec_id)
@@ -57,7 +58,8 @@ class SalesLogic:
                     (spec_id, transaction_date, transaction_type, quantity, memo)
                 VALUES (?, ?, '출고', ?, ?)
                 """,
-                (target_spec_id, sale_date, quantity, memo_str)
+                (target_spec_id, sale_date, quantity, memo_str),
+                auto_commit=auto_commit
             )
             return -1  # 판매 기록이 없음을 의미
 
@@ -72,7 +74,8 @@ class SalesLogic:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (sale_date, customer_id, spec_id, quantity, unit_price,
-             total, payment_method, cash_amount, card_amount, memo)
+             total, payment_method, cash_amount, card_amount, memo),
+            auto_commit=auto_commit
         )
 
         # 일반 재고 출고 자동 기록
@@ -82,7 +85,8 @@ class SalesLogic:
                 (spec_id, transaction_date, transaction_type, quantity, reference_id, memo)
             VALUES (?, ?, '출고', ?, ?, '판매 출고')
             """,
-            (spec_id, sale_date, quantity, sale_id)
+            (spec_id, sale_date, quantity, sale_id),
+            auto_commit=auto_commit
         )
         return sale_id
 
@@ -94,13 +98,18 @@ class SalesLogic:
         반환: 저장된 sale_id 목록
         """
         ids = []
-        for r in rows:
-            sid = self.add_sale(
-                r['sale_date'], r['customer_id'], r['spec_id'],
-                r['quantity'], r['unit_price'], r['payment_method'],
-                r.get('memo', ''), r.get('cash_amount', 0), r.get('card_amount', 0)
-            )
-            ids.append(sid)
+        try:
+            for r in rows:
+                sid = self.add_sale(
+                    r['sale_date'], r['customer_id'], r['spec_id'],
+                    r['quantity'], r['unit_price'], r['payment_method'],
+                    r.get('memo', ''), r.get('cash_amount', 0), r.get('card_amount', 0),
+                    auto_commit=False
+                )
+                ids.append(sid)
+            self.db.commit()
+        except Exception:
+            raise
         return ids
 
     # ── 판매 수정 / 삭제 ─────────────────────────────────────

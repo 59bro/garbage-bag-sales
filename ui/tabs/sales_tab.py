@@ -420,7 +420,7 @@ class SalesTab(QWidget):
             self.sales_logic.add_sales_batch(rows)
             count = len(rows)
             self._clear_bill()
-            self.refresh() # 재고 갱신
+            self._load_grid() # 재고 수량만 갱신 (거래처 전체 재로드 불필요)
             QMessageBox.information(self, "저장 완료", f"✓  {count}개 품목의 납품 정보가 저장되었습니다.")
 
         except Exception as e:

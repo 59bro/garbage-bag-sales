@@ -106,17 +106,9 @@ class DBManager:
     def _get_pg_connection(self):
         import psycopg2
         import psycopg2.extras
-        # ── 커넥션 풀링: 기존 연결이 살아있으면 재사용 ──
+        # ── 커넥션 재사용: 연결이 열려 있으면 바로 반환 (매번 SELECT 1 핑 날리지 않음) ──
         if hasattr(self, '_pg_conn') and self._pg_conn and not self._pg_conn.closed:
-            try:
-                # 연결 상태 확인 (끊어졌으면 재연결)
-                self._pg_conn.cursor().execute("SELECT 1")
-                return self._pg_conn
-            except Exception:
-                try:
-                    self._pg_conn.close()
-                except Exception:
-                    pass
+            return self._pg_conn
 
         # DATABASE_URL 환경변수로 설정된 DSN 우선 사용
         if getattr(self, '_pg_dsn', ''):
@@ -248,14 +240,21 @@ class DBManager:
                 row = cur.fetchone()
                 return dict(row) if row else None
 
-    def execute(self, sql: str, params: tuple = ()) -> int:
+    def commit(self):
+        """명시적 트랜잭션 커밋."""
+        if self.db_mode == 'postgres':
+            if hasattr(self, '_pg_conn') and self._pg_conn and not self._pg_conn.closed:
+                self._pg_conn.commit()
+
+    def execute(self, sql: str, params: tuple = (), auto_commit: bool = True) -> int:
         sql = self._convert_sql(sql)
         if self.db_mode == 'postgres':
             conn = self.get_connection()
             try:
                 cur = conn.cursor()
                 cur.execute(sql + " RETURNING id" if "INSERT" in sql.upper() and "RETURNING" not in sql.upper() else sql, params)
-                conn.commit()
+                if auto_commit:
+                    conn.commit()
                 if cur.description:
                     row = cur.fetchone()
                     result = row[0] if row else 0
@@ -269,7 +268,8 @@ class DBManager:
         else:
             with self.get_connection() as conn:
                 cur = conn.execute(sql, params)
-                conn.commit()
+                if auto_commit:
+                    conn.commit()
                 return cur.lastrowid
 
     def executemany(self, sql: str, params_list: list):
