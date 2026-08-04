@@ -229,16 +229,17 @@ def export_daily_sales_template(date_str: str, sales_data: list,
     if not template_path:
         from utils.db_config_manager import get_root_dir
         from database.db_manager import DBManager
+        db_p = DBManager().db_path
         candidates = [
             r'F:\일일판매일지\엑셀연동일일판매일지.xls',
-            os.path.join(os.path.dirname(DBManager().db_path), '엑셀연동일일판매일지.xls'),
+            os.path.join(os.path.dirname(db_p), '엑셀연동일일판매일지.xls') if db_p else '',
             os.path.join(get_root_dir(), '엑셀연동일일판매일지.xls'),
             os.path.join(get_root_dir(), 'data', '엑셀연동일일판매일지.xls'),
             r'G:\내 드라이브\종량제봉투_통합DB\엑셀연동일일판매일지.xls',
             r'D:\내 드라이브\종량제봉투_통합DB\엑셀연동일일판매일지.xls'
         ]
         for c in candidates:
-            if os.path.exists(c):
+            if c and os.path.exists(c):
                 template_path = c
                 break
         if not template_path:
