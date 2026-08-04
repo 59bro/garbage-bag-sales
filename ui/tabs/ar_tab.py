@@ -155,27 +155,32 @@ class ARTab(QWidget):
         if dist:
             rows = [r for r in rows if r.get('district') == dist]
 
+        self._cust_summary_rows = rows
         self.tbl_out_cust_ids = []
-        self.tbl_out.setRowCount(len(rows))
-        for r, row in enumerate(rows):
-            self.tbl_out_cust_ids.append(row['customer_id'])
-            outstanding = row['outstanding']
-            color = "#ef4444" if outstanding > 0 else "#10b981"
-            vals = [
-                row['customer_name'], row.get('district', ''),
-                fmt_currency(row.get('initial_ar', 0)),
-                fmt_currency(row.get('sales_credit', 0)),
-                fmt_currency(row['total_collected']),
-                fmt_currency(outstanding),
-            ]
-            for c, val in enumerate(vals):
-                item = QTableWidgetItem(str(val))
-                item.setTextAlignment(Qt.AlignCenter)
-                if c == 5:
-                    item.setForeground(QColor(color))
-                elif c == 2 and row.get('initial_ar', 0) != 0:
-                    item.setForeground(QColor("#ea580c"))
-                self.tbl_out.setItem(r, c, item)
+        self.tbl_out.setUpdatesEnabled(False)
+        try:
+            self.tbl_out.setRowCount(len(rows))
+            for r, row in enumerate(rows):
+                self.tbl_out_cust_ids.append(row['customer_id'])
+                outstanding = row['outstanding']
+                color = "#ef4444" if outstanding > 0 else "#10b981"
+                vals = [
+                    row['customer_name'], row.get('district', ''),
+                    fmt_currency(row.get('initial_ar', 0)),
+                    fmt_currency(row.get('sales_credit', 0)),
+                    fmt_currency(row['total_collected']),
+                    fmt_currency(outstanding),
+                ]
+                for c, val in enumerate(vals):
+                    item = QTableWidgetItem(str(val))
+                    item.setTextAlignment(Qt.AlignCenter)
+                    if c == 5:
+                        item.setForeground(QColor(color))
+                    elif c == 2 and row.get('initial_ar', 0) != 0:
+                        item.setForeground(QColor("#ea580c"))
+                    self.tbl_out.setItem(r, c, item)
+        finally:
+            self.tbl_out.setUpdatesEnabled(True)
         self.tbl_credit_det.setRowCount(0)
 
     def _export_ar_excel(self):
