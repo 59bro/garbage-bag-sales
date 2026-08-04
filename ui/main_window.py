@@ -193,6 +193,10 @@ class MainWindow(QMainWindow):
             setattr(self, attr_names[idx], new_tab)
 
         self.stack.setCurrentIndex(idx)
+        current_tab = self._tab_list[idx]
+        if hasattr(current_tab, 'refresh'):
+            current_tab.refresh()
+
         icon, title, subtitle = self.NAV_ITEMS[idx]
         self.lbl_title.setText(f"{icon}  {title}")
         self.lbl_subtitle.setText(subtitle)
